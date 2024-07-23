@@ -17,4 +17,8 @@ class ApplicationController < ActionController::Base
       redirect_to login_path
     end
   end
+
+  def test
+    render plain: "Ngrok is working!"
+  end
 end

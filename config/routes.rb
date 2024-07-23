@@ -9,4 +9,5 @@ Rails.application.routes.draw do
   get 'inbox', to: 'inbox#index'
   get 'inbox/:id', to: 'inbox#show', as: 'email'
   mount ActionMailbox::Engine => "/rails/action_mailbox"
+  get 'test', to: 'application#test'
 end

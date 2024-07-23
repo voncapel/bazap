@@ -24,7 +24,8 @@ module BazapNews
     #
     # config.time_zone = "Central Time (US & Canada)"
     # config.eager_load_paths << Rails.root.join("extras")
-    config.action_mailbox.ingress = :smtp
+    config.action_mailbox.ingress = :postmark
+    config.action_mailbox.postmark_password = ENV['RAILS_INBOUND_EMAIL_PASSWORD']
   end
 end
 

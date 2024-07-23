@@ -77,6 +77,10 @@ Rails.application.configure do
   config.assets.debug = true
 
   config.assets.compile = true
-  
-  config.action_mailbox.ingress = :smtp
+
+  config.action_mailbox.ingress = :postmark
+
+  config.hosts << "c6c0-73-202-218-83.ngrok-free.app"
+  config.hosts << "c6c0-73-202-218-83.ngrok-free.app"
+  config.hosts << /[a-z0-9]+\.ngrok\.io/
 end

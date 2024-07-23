@@ -13,6 +13,8 @@ const foldersToIgnore = [
   "test",
   "tmp",
   "app/assets",
+  ".git",
+  "git",
 ]; // Add specific files to ignore here
 const filesToIgnore = [".DS_Store"];
 

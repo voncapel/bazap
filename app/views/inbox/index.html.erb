@@ -3,6 +3,7 @@
   <div class="flex-grow-0">
     <div class="p-4">
       <h2 class="text-2xl font-semibold mb-4">Inbox</h2>
+      <p><%= current_user.email %></p>
       <% if @senders.present? %>
         <ul>
           <% @senders.each do |sender, data| %>

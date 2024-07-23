@@ -59,6 +59,7 @@ group :development do
 
   # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
   # gem "spring"
+  gem 'dotenv-rails', groups: [:development, :test]
 end
 
 group :test do
@@ -71,5 +72,6 @@ gem 'tailwindcss-rails'
 
 gem 'bcrypt', '~> 3.1.7'
 
-gem 'net-imap'
-gem 'net-pop'
+gem 'postmark-rails'
+
+gem 'whenever', require: false
