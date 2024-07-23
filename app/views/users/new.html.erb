@@ -1,0 +1,39 @@
+<% if @user.errors.any? %>
+  <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+    <strong class="font-bold">Error:</strong>
+    <ul>
+    <% @user.errors.full_messages.each do |message| %>
+      <li><%= message %></li>
+    <% end %>
+    </ul>
+  </div>
+<% end %>
+
+<div class="p-4 md:w-8/12 lg:w-6/12 mx-auto">
+  <%= link_to '< Back to homepage', root_path, class: 'hover:text-darkBlue-200' %>
+</div>
+<div class="bg-darkBlue-500 text-white-500 p-6 rounded-xl md:w-8/12 lg:w-6/12 mx-auto">
+  <div class="pb-8 mb-8 border-b border-cream-500/20">
+    <%= render partial: "shared/graphics/logo",  locals: {classes: "fill-cream-500"} %>
+  </div>
+  <h1 class="mb-4 text-center text-3xl italic p-4 text-blue-500">Get your free bazap.news email today !</h1>
+  <%= form_with(model: User.new, url: users_path, local: true) do |f| %>
+    <div class="flex mb-4 rounded ">
+      <%= f.text_field :username, placeholder: "Your username", class: "flex-1 p-2 text-darkBlue-500 rounded-l bg-cream-500 p-4" %>
+      <span class="inline-flex items-center px-8 bg-cream-500/20 text-cream-500 text-md rounded-r">
+        @bazap.news
+      </span>
+    </div>
+    <%= f.password_field :password, placeholder: "Password", class: "w-full p-2 mb-4 text-darkBlue-500 rounded bg-cream-500 p-4" %>
+    <%= f.password_field :password_confirmation, placeholder: "Confirm password", class: "w-full p-2 mb-4 text-darkBlue-500 rounded bg-cream-500 p-4" %>
+    <%= f.submit "Sign up", class: "w-full bg-blue-500 text-white-500 px-4 py-4 rounded hover:bg-blue-400 transition duration-300 hover:cursor-pointer" %>
+  <% end %>
+  
+</div>
+
+<div class="p-4 md:w-8/12 lg:w-6/12 mx-auto">
+  <div class="flex items-center gap-2"> 
+    <p class="font-header-font text-2xl font-light italic">Allready have an account ?</p>
+    <%= link_to 'LOGIN', login_path, class: 'hover:text-darkBlue-500/80 py-2 px-4 border border-darkBlue-500 rounded-lg' %>
+  </div>
+</div>

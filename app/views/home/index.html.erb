@@ -1,0 +1,59 @@
+<%= render partial: "shared/nav_front" %>
+<div class="container mx-auto ">
+  <h1 class="">
+    <%= render partial: "shared/graphics/logo",  locals: {classes: "fill-darkBlue-500"} %>
+  </h1>
+  <h2 class="text-2xl md:text-4xl text-center bg-darkBlue-600 font-light italic p-4 border-b border-darkBlue-500 mb-16">"The newsletter experience for the modern times"</h2>
+  
+  <div class="grid grid-cols-1 md:grid-cols-2 mb-16 items-center">
+    <div>
+      <h3 class="text-3xl font-header-font mb-4 text-darkBlue-500">One email to manage all your subscriptions, beautifully rendered and easily readable.</h3>
+      <p class="mb-4 text-darkBlue-500 leading-relaxed">Imagine a world where your inbox is no longer cluttered with unreadable newsletters. With Bazap, that world is a reality. We take your subscribed newsletters and transform them into beautifully formatted articles, all accessible from a single, easy-to-manage email address. No more juggling multiple inboxes or complex forwarding rules—just a seamless reading experience designed for your comfort and convenience.</p>
+    </div>
+    
+    <div class="bg-darkBlue-500 text-white-500 p-6 rounded-xl">
+      <h3 class="mb-4 text-center text-3xl italic p-4 text-blue-500">Get your free bazap.news email</h3>
+      <%= form_with(model: User.new, url: users_path, local: true) do |f| %>
+        <div class="flex mb-4 rounded ">
+          <%= f.text_field :username, placeholder: "Your username", class: "flex-1 p-2 text-darkBlue-500 rounded-l bg-cream-500 p-4" %>
+          <span class="inline-flex items-center px-8 bg-cream-500/20 text-cream-500 text-md rounded-r">
+            @bazap.news
+          </span>
+        </div>
+        <%= f.password_field :password, placeholder: "Password", class: "w-full p-2 mb-4 text-darkBlue-500 rounded bg-cream-500 p-4" %>
+        <%= f.password_field :password_confirmation, placeholder: "Confirm password", class: "w-full p-2 mb-4 text-darkBlue-500 rounded bg-cream-500 p-4" %>
+        <%= f.submit "Sign up", class: "w-full bg-blue-500 text-white-500 px-4 py-4 rounded hover:bg-blue-400 transition duration-300 hover:cursor-pointer" %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-red-500 rounded-lg text-white-500 overflow-hidden flex flex-col items-stretch">
+      <div class="p-8 relative grow">
+        <div class="bg-cream-500 rounded-full text-darkBlue-500 inline-block px-3 py-1 w-8 h-8 text-center mb-2">
+          <p class="text-md font-medium">1</p>
+        </div>
+        <h3 class="text-5xl font-header-font mt-4 mb-4 italic text-darkBlue-500">Secure your free bazap.news email</h3>
+      </div>
+      <%= image_tag "landing_illu 1.webp", class: "object-fit mix-blend-darken opacity-70" %>
+    </div>
+    <div class="bg-green-500 rounded-lg text-white-500 overflow-hidden flex flex-col items-stretch">
+      <div class="p-8 relative grow">
+        <div class="bg-cream-500 rounded-full text-darkBlue-500 inline-block px-3 py-1 w-8 h-8 text-center mb-2">
+          <p class="text-md font-medium">2</p>
+        </div>
+        <h3 class="text-5xl font-header-font mt-4 mb-4 italic text-darkBlue-500">Use it to subscribe to any newsletter</h3>
+      </div>
+      <%= image_tag "landing_illu 2.webp", class: "object-fit mix-blend-darken opacity-70" %>
+    </div>
+    <div class="bg-blue-500 rounded-lg text-white-500 overflow-hidden flex flex-col items-stretch">
+      <div class="p-8 relative grow">
+        <div class="bg-cream-500 rounded-full text-darkBlue-500 inline-block px-3 py-1 w-8 h-8 text-center mb-2">
+          <p class="text-md font-medium">3</p>
+        </div>
+        <h3 class="text-5xl font-header-font mt-4 mb-4 italic text-darkBlue-500">Enjoy the best reading experience</h3>
+      </div>
+      <%= image_tag "landing_illu 3.webp", class: "object-fit mix-blend-darken opacity-70" %>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,14 @@
+<nav class="text-darkBlue-500 py-4">
+    <div class="container mx-auto flex justify-start items-center space-x-6 font-semibold gap-8">
+      <%= link_to 'HOME', root_path, class: 'hover:text-darkBlue-200' %>
+      <%= link_to 'ABOUT', '#', class: 'hover:text-darkBlue-200' %>
+      <%= link_to 'PRICING', '#', class: 'hover:text-darkBlue-200' %>
+      <% if logged_in? %>
+        <%= link_to 'INBOX', inbox_path, class: 'hover:text-darkBlue-200' %>
+        <%= button_to 'LOGOUT', logout_path, method: :delete, class: 'hover:text-darkBlue-200' %>
+      <% else %>
+        <%= link_to 'LOGIN', login_path, class: 'hover:text-darkBlue-200' %>
+        <%= link_to 'REGISTER', signup_path, class: 'hover:text-darkBlue-200' %>
+      <% end %>
+    </div>
+  </nav>

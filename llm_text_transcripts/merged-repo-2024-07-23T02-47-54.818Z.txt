@@ -1,0 +1,3069 @@
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.DOCKERIGNORE CODE IS BELOW
+# See https://docs.docker.com/engine/reference/builder/#dockerignore-file for more about ignoring files.
+
+# Ignore git directory.
+/.git/
+
+# Ignore bundler config.
+/.bundle
+
+# Ignore all environment files (except templates).
+/.env*
+!/.env*.erb
+
+# Ignore all default key files.
+/config/master.key
+/config/credentials/*.key
+
+# Ignore all logfiles and tempfiles.
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+
+# Ignore pidfiles, but keep the directory.
+/tmp/pids/*
+!/tmp/pids/.keep
+
+# Ignore storage (uploaded files in development and any SQLite databases).
+/storage/*
+!/storage/.keep
+/tmp/storage/*
+!/tmp/storage/.keep
+
+# Ignore assets.
+/node_modules/
+/app/assets/builds/*
+!/app/assets/builds/.keep
+/public/assets
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HEAD CODE IS BELOW
+ref: refs/heads/main
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/CONFIG CODE IS BELOW
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+	precomposeunicode = true
+[diff "rails_credentials"]
+	textconv = bin/rails credentials:diff
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/DESCRIPTION CODE IS BELOW
+Unnamed repository; edit this file 'description' to name the repository.
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/APPLYPATCH-MSG.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# An example hook script to check the commit log message taken by
+# applypatch from an e-mail message.
+#
+# The hook should exit with non-zero status after issuing an
+# appropriate message if it wants to stop the commit.  The hook is
+# allowed to edit the commit message file.
+#
+# To enable this hook, rename this file to "applypatch-msg".
+
+. git-sh-setup
+commitmsg="$(git rev-parse --git-path hooks/commit-msg)"
+test -x "$commitmsg" && exec "$commitmsg" ${1+"$@"}
+:
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/COMMIT-MSG.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# An example hook script to check the commit log message.
+# Called by "git commit" with one argument, the name of the file
+# that has the commit message.  The hook should exit with non-zero
+# status after issuing an appropriate message if it wants to stop the
+# commit.  The hook is allowed to edit the commit message file.
+#
+# To enable this hook, rename this file to "commit-msg".
+
+# Uncomment the below to add a Signed-off-by line to the message.
+# Doing this in a hook is a bad idea in general, but the prepare-commit-msg
+# hook is more suited to it.
+#
+# SOB=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
+# grep -qs "^$SOB" "$1" || echo "$SOB" >> "$1"
+
+# This example catches duplicate Signed-off-by lines.
+
+test "" = "$(grep '^Signed-off-by: ' "$1" |
+	 sort | uniq -c | sed -e '/^[ 	]*1[ 	]/d')" || {
+	echo >&2 Duplicate Signed-off-by lines.
+	exit 1
+}
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/FSMONITOR-WATCHMAN.SAMPLE CODE IS BELOW
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use IPC::Open2;
+
+# An example hook script to integrate Watchman
+# (https://facebook.github.io/watchman/) with git to speed up detecting
+# new and modified files.
+#
+# The hook is passed a version (currently 2) and last update token
+# formatted as a string and outputs to stdout a new update token and
+# all files that have been modified since the update token. Paths must
+# be relative to the root of the working tree and separated by a single NUL.
+#
+# To enable this hook, rename this file to "query-watchman" and set
+# 'git config core.fsmonitor .git/hooks/query-watchman'
+#
+my ($version, $last_update_token) = @ARGV;
+
+# Uncomment for debugging
+# print STDERR "$0 $version $last_update_token\n";
+
+# Check the hook interface version
+if ($version ne 2) {
+	die "Unsupported query-fsmonitor hook version '$version'.\n" .
+	    "Falling back to scanning...\n";
+}
+
+my $git_work_tree = get_working_dir();
+
+my $retry = 1;
+
+my $json_pkg;
+eval {
+	require JSON::XS;
+	$json_pkg = "JSON::XS";
+	1;
+} or do {
+	require JSON::PP;
+	$json_pkg = "JSON::PP";
+};
+
+launch_watchman();
+
+sub launch_watchman {
+	my $o = watchman_query();
+	if (is_work_tree_watched($o)) {
+		output_result($o->{clock}, @{$o->{files}});
+	}
+}
+
+sub output_result {
+	my ($clockid, @files) = @_;
+
+	# Uncomment for debugging watchman output
+	# open (my $fh, ">", ".git/watchman-output.out");
+	# binmode $fh, ":utf8";
+	# print $fh "$clockid\n@files\n";
+	# close $fh;
+
+	binmode STDOUT, ":utf8";
+	print $clockid;
+	print "\0";
+	local $, = "\0";
+	print @files;
+}
+
+sub watchman_clock {
+	my $response = qx/watchman clock "$git_work_tree"/;
+	die "Failed to get clock id on '$git_work_tree'.\n" .
+		"Falling back to scanning...\n" if $? != 0;
+
+	return $json_pkg->new->utf8->decode($response);
+}
+
+sub watchman_query {
+	my $pid = open2(\*CHLD_OUT, \*CHLD_IN, 'watchman -j --no-pretty')
+	or die "open2() failed: $!\n" .
+	"Falling back to scanning...\n";
+
+	# In the query expression below we're asking for names of files that
+	# changed since $last_update_token but not from the .git folder.
+	#
+	# To accomplish this, we're using the "since" generator to use the
+	# recency index to select candidate nodes and "fields" to limit the
+	# output to file names only. Then we're using the "expression" term to
+	# further constrain the results.
+	my $last_update_line = "";
+	if (substr($last_update_token, 0, 1) eq "c") {
+		$last_update_token = "\"$last_update_token\"";
+		$last_update_line = qq[\n"since": $last_update_token,];
+	}
+	my $query = <<"	END";
+		["query", "$git_work_tree", {$last_update_line
+			"fields": ["name"],
+			"expression": ["not", ["dirname", ".git"]]
+		}]
+	END
+
+	# Uncomment for debugging the watchman query
+	# open (my $fh, ">", ".git/watchman-query.json");
+	# print $fh $query;
+	# close $fh;
+
+	print CHLD_IN $query;
+	close CHLD_IN;
+	my $response = do {local $/; <CHLD_OUT>};
+
+	# Uncomment for debugging the watch response
+	# open ($fh, ">", ".git/watchman-response.json");
+	# print $fh $response;
+	# close $fh;
+
+	die "Watchman: command returned no output.\n" .
+	"Falling back to scanning...\n" if $response eq "";
+	die "Watchman: command returned invalid output: $response\n" .
+	"Falling back to scanning...\n" unless $response =~ /^\{/;
+
+	return $json_pkg->new->utf8->decode($response);
+}
+
+sub is_work_tree_watched {
+	my ($output) = @_;
+	my $error = $output->{error};
+	if ($retry > 0 and $error and $error =~ m/unable to resolve root .* directory (.*) is not watched/) {
+		$retry--;
+		my $response = qx/watchman watch "$git_work_tree"/;
+		die "Failed to make watchman watch '$git_work_tree'.\n" .
+		    "Falling back to scanning...\n" if $? != 0;
+		$output = $json_pkg->new->utf8->decode($response);
+		$error = $output->{error};
+		die "Watchman: $error.\n" .
+		"Falling back to scanning...\n" if $error;
+
+		# Uncomment for debugging watchman output
+		# open (my $fh, ">", ".git/watchman-output.out");
+		# close $fh;
+
+		# Watchman will always return all files on the first query so
+		# return the fast "everything is dirty" flag to git and do the
+		# Watchman query just to get it over with now so we won't pay
+		# the cost in git to look up each individual file.
+		my $o = watchman_clock();
+		$error = $output->{error};
+
+		die "Watchman: $error.\n" .
+		"Falling back to scanning...\n" if $error;
+
+		output_result($o->{clock}, ("/"));
+		$last_update_token = $o->{clock};
+
+		eval { launch_watchman() };
+		return 0;
+	}
+
+	die "Watchman: $error.\n" .
+	"Falling back to scanning...\n" if $error;
+
+	return 1;
+}
+
+sub get_working_dir {
+	my $working_dir;
+	if ($^O =~ 'msys' || $^O =~ 'cygwin') {
+		$working_dir = Win32::GetCwd();
+		$working_dir =~ tr/\\/\//;
+	} else {
+		require Cwd;
+		$working_dir = Cwd::cwd();
+	}
+
+	return $working_dir;
+}
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/POST-UPDATE.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# An example hook script to prepare a packed repository for use over
+# dumb transports.
+#
+# To enable this hook, rename this file to "post-update".
+
+exec git update-server-info
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/PRE-APPLYPATCH.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# An example hook script to verify what is about to be committed
+# by applypatch from an e-mail message.
+#
+# The hook should exit with non-zero status after issuing an
+# appropriate message if it wants to stop the commit.
+#
+# To enable this hook, rename this file to "pre-applypatch".
+
+. git-sh-setup
+precommit="$(git rev-parse --git-path hooks/pre-commit)"
+test -x "$precommit" && exec "$precommit" ${1+"$@"}
+:
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/PRE-COMMIT.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# An example hook script to verify what is about to be committed.
+# Called by "git commit" with no arguments.  The hook should
+# exit with non-zero status after issuing an appropriate message if
+# it wants to stop the commit.
+#
+# To enable this hook, rename this file to "pre-commit".
+
+if git rev-parse --verify HEAD >/dev/null 2>&1
+then
+	against=HEAD
+else
+	# Initial commit: diff against an empty tree object
+	against=$(git hash-object -t tree /dev/null)
+fi
+
+# If you want to allow non-ASCII filenames set this variable to true.
+allownonascii=$(git config --type=bool hooks.allownonascii)
+
+# Redirect output to stderr.
+exec 1>&2
+
+# Cross platform projects tend to avoid non-ASCII filenames; prevent
+# them from being added to the repository. We exploit the fact that the
+# printable range starts at the space character and ends with tilde.
+if [ "$allownonascii" != "true" ] &&
+	# Note that the use of brackets around a tr range is ok here, (it's
+	# even required, for portability to Solaris 10's /usr/bin/tr), since
+	# the square bracket bytes happen to fall in the designated range.
+	test $(git diff --cached --name-only --diff-filter=A -z $against |
+	  LC_ALL=C tr -d '[ -~]\0' | wc -c) != 0
+then
+	cat <<\EOF
+Error: Attempt to add a non-ASCII file name.
+
+This can cause problems if you want to work with people on other platforms.
+
+To be portable it is advisable to rename the file.
+
+If you know what you are doing you can disable this check using:
+
+  git config hooks.allownonascii true
+EOF
+	exit 1
+fi
+
+# If there are whitespace errors, print the offending file names and fail.
+exec git diff-index --check --cached $against --
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/PRE-MERGE-COMMIT.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# An example hook script to verify what is about to be committed.
+# Called by "git merge" with no arguments.  The hook should
+# exit with non-zero status after issuing an appropriate message to
+# stderr if it wants to stop the merge commit.
+#
+# To enable this hook, rename this file to "pre-merge-commit".
+
+. git-sh-setup
+test -x "$GIT_DIR/hooks/pre-commit" &&
+        exec "$GIT_DIR/hooks/pre-commit"
+:
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/PRE-PUSH.SAMPLE CODE IS BELOW
+#!/bin/sh
+
+# An example hook script to verify what is about to be pushed.  Called by "git
+# push" after it has checked the remote status, but before anything has been
+# pushed.  If this script exits with a non-zero status nothing will be pushed.
+#
+# This hook is called with the following parameters:
+#
+# $1 -- Name of the remote to which the push is being done
+# $2 -- URL to which the push is being done
+#
+# If pushing without using a named remote those arguments will be equal.
+#
+# Information about the commits which are being pushed is supplied as lines to
+# the standard input in the form:
+#
+#   <local ref> <local oid> <remote ref> <remote oid>
+#
+# This sample shows how to prevent push of commits where the log message starts
+# with "WIP" (work in progress).
+
+remote="$1"
+url="$2"
+
+zero=$(git hash-object --stdin </dev/null | tr '[0-9a-f]' '0')
+
+while read local_ref local_oid remote_ref remote_oid
+do
+	if test "$local_oid" = "$zero"
+	then
+		# Handle delete
+		:
+	else
+		if test "$remote_oid" = "$zero"
+		then
+			# New branch, examine all commits
+			range="$local_oid"
+		else
+			# Update to existing branch, examine new commits
+			range="$remote_oid..$local_oid"
+		fi
+
+		# Check for WIP commit
+		commit=$(git rev-list -n 1 --grep '^WIP' "$range")
+		if test -n "$commit"
+		then
+			echo >&2 "Found WIP commit in $local_ref, not pushing"
+			exit 1
+		fi
+	fi
+done
+
+exit 0
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/PRE-REBASE.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# Copyright (c) 2006, 2008 Junio C Hamano
+#
+# The "pre-rebase" hook is run just before "git rebase" starts doing
+# its job, and can prevent the command from running by exiting with
+# non-zero status.
+#
+# The hook is called with the following parameters:
+#
+# $1 -- the upstream the series was forked from.
+# $2 -- the branch being rebased (or empty when rebasing the current branch).
+#
+# This sample shows how to prevent topic branches that are already
+# merged to 'next' branch from getting rebased, because allowing it
+# would result in rebasing already published history.
+
+publish=next
+basebranch="$1"
+if test "$#" = 2
+then
+	topic="refs/heads/$2"
+else
+	topic=`git symbolic-ref HEAD` ||
+	exit 0 ;# we do not interrupt rebasing detached HEAD
+fi
+
+case "$topic" in
+refs/heads/??/*)
+	;;
+*)
+	exit 0 ;# we do not interrupt others.
+	;;
+esac
+
+# Now we are dealing with a topic branch being rebased
+# on top of master.  Is it OK to rebase it?
+
+# Does the topic really exist?
+git show-ref -q "$topic" || {
+	echo >&2 "No such branch $topic"
+	exit 1
+}
+
+# Is topic fully merged to master?
+not_in_master=`git rev-list --pretty=oneline ^master "$topic"`
+if test -z "$not_in_master"
+then
+	echo >&2 "$topic is fully merged to master; better remove it."
+	exit 1 ;# we could allow it, but there is no point.
+fi
+
+# Is topic ever merged to next?  If so you should not be rebasing it.
+only_next_1=`git rev-list ^master "^$topic" ${publish} | sort`
+only_next_2=`git rev-list ^master           ${publish} | sort`
+if test "$only_next_1" = "$only_next_2"
+then
+	not_in_topic=`git rev-list "^$topic" master`
+	if test -z "$not_in_topic"
+	then
+		echo >&2 "$topic is already up to date with master"
+		exit 1 ;# we could allow it, but there is no point.
+	else
+		exit 0
+	fi
+else
+	not_in_next=`git rev-list --pretty=oneline ^${publish} "$topic"`
+	/usr/bin/perl -e '
+		my $topic = $ARGV[0];
+		my $msg = "* $topic has commits already merged to public branch:\n";
+		my (%not_in_next) = map {
+			/^([0-9a-f]+) /;
+			($1 => 1);
+		} split(/\n/, $ARGV[1]);
+		for my $elem (map {
+				/^([0-9a-f]+) (.*)$/;
+				[$1 => $2];
+			} split(/\n/, $ARGV[2])) {
+			if (!exists $not_in_next{$elem->[0]}) {
+				if ($msg) {
+					print STDERR $msg;
+					undef $msg;
+				}
+				print STDERR " $elem->[1]\n";
+			}
+		}
+	' "$topic" "$not_in_next" "$not_in_master"
+	exit 1
+fi
+
+<<\DOC_END
+
+This sample hook safeguards topic branches that have been
+published from being rewound.
+
+The workflow assumed here is:
+
+ * Once a topic branch forks from "master", "master" is never
+   merged into it again (either directly or indirectly).
+
+ * Once a topic branch is fully cooked and merged into "master",
+   it is deleted.  If you need to build on top of it to correct
+   earlier mistakes, a new topic branch is created by forking at
+   the tip of the "master".  This is not strictly necessary, but
+   it makes it easier to keep your history simple.
+
+ * Whenever you need to test or publish your changes to topic
+   branches, merge them into "next" branch.
+
+The script, being an example, hardcodes the publish branch name
+to be "next", but it is trivial to make it configurable via
+$GIT_DIR/config mechanism.
+
+With this workflow, you would want to know:
+
+(1) ... if a topic branch has ever been merged to "next".  Young
+    topic branches can have stupid mistakes you would rather
+    clean up before publishing, and things that have not been
+    merged into other branches can be easily rebased without
+    affecting other people.  But once it is published, you would
+    not want to rewind it.
+
+(2) ... if a topic branch has been fully merged to "master".
+    Then you can delete it.  More importantly, you should not
+    build on top of it -- other people may already want to
+    change things related to the topic as patches against your
+    "master", so if you need further changes, it is better to
+    fork the topic (perhaps with the same name) afresh from the
+    tip of "master".
+
+Let's look at this example:
+
+		   o---o---o---o---o---o---o---o---o---o "next"
+		  /       /           /           /
+		 /   a---a---b A     /           /
+		/   /               /           /
+	       /   /   c---c---c---c B         /
+	      /   /   /             \         /
+	     /   /   /   b---b C     \       /
+	    /   /   /   /             \     /
+    ---o---o---o---o---o---o---o---o---o---o---o "master"
+
+
+A, B and C are topic branches.
+
+ * A has one fix since it was merged up to "next".
+
+ * B has finished.  It has been fully merged up to "master" and "next",
+   and is ready to be deleted.
+
+ * C has not merged to "next" at all.
+
+We would want to allow C to be rebased, refuse A, and encourage
+B to be deleted.
+
+To compute (1):
+
+	git rev-list ^master ^topic next
+	git rev-list ^master        next
+
+	if these match, topic has not merged in next at all.
+
+To compute (2):
+
+	git rev-list master..topic
+
+	if this is empty, it is fully merged to "master".
+
+DOC_END
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/PRE-RECEIVE.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# An example hook script to make use of push options.
+# The example simply echoes all push options that start with 'echoback='
+# and rejects all pushes when the "reject" push option is used.
+#
+# To enable this hook, rename this file to "pre-receive".
+
+if test -n "$GIT_PUSH_OPTION_COUNT"
+then
+	i=0
+	while test "$i" -lt "$GIT_PUSH_OPTION_COUNT"
+	do
+		eval "value=\$GIT_PUSH_OPTION_$i"
+		case "$value" in
+		echoback=*)
+			echo "echo from the pre-receive-hook: ${value#*=}" >&2
+			;;
+		reject)
+			exit 1
+		esac
+		i=$((i + 1))
+	done
+fi
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/PREPARE-COMMIT-MSG.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# An example hook script to prepare the commit log message.
+# Called by "git commit" with the name of the file that has the
+# commit message, followed by the description of the commit
+# message's source.  The hook's purpose is to edit the commit
+# message file.  If the hook fails with a non-zero status,
+# the commit is aborted.
+#
+# To enable this hook, rename this file to "prepare-commit-msg".
+
+# This hook includes three examples. The first one removes the
+# "# Please enter the commit message..." help message.
+#
+# The second includes the output of "git diff --name-status -r"
+# into the message, just before the "git status" output.  It is
+# commented because it doesn't cope with --amend or with squashed
+# commits.
+#
+# The third example adds a Signed-off-by line to the message, that can
+# still be edited.  This is rarely a good idea.
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+SHA1=$3
+
+/usr/bin/perl -i.bak -ne 'print unless(m/^. Please enter the commit message/..m/^#$/)' "$COMMIT_MSG_FILE"
+
+# case "$COMMIT_SOURCE,$SHA1" in
+#  ,|template,)
+#    /usr/bin/perl -i.bak -pe '
+#       print "\n" . `git diff --cached --name-status -r`
+# 	 if /^#/ && $first++ == 0' "$COMMIT_MSG_FILE" ;;
+#  *) ;;
+# esac
+
+# SOB=$(git var GIT_COMMITTER_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
+# git interpret-trailers --in-place --trailer "$SOB" "$COMMIT_MSG_FILE"
+# if test -z "$COMMIT_SOURCE"
+# then
+#   /usr/bin/perl -i.bak -pe 'print "\n" if !$first_line++' "$COMMIT_MSG_FILE"
+# fi
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/PUSH-TO-CHECKOUT.SAMPLE CODE IS BELOW
+#!/bin/sh
+
+# An example hook script to update a checked-out tree on a git push.
+#
+# This hook is invoked by git-receive-pack(1) when it reacts to git
+# push and updates reference(s) in its repository, and when the push
+# tries to update the branch that is currently checked out and the
+# receive.denyCurrentBranch configuration variable is set to
+# updateInstead.
+#
+# By default, such a push is refused if the working tree and the index
+# of the remote repository has any difference from the currently
+# checked out commit; when both the working tree and the index match
+# the current commit, they are updated to match the newly pushed tip
+# of the branch. This hook is to be used to override the default
+# behaviour; however the code below reimplements the default behaviour
+# as a starting point for convenient modification.
+#
+# The hook receives the commit with which the tip of the current
+# branch is going to be updated:
+commit=$1
+
+# It can exit with a non-zero status to refuse the push (when it does
+# so, it must not modify the index or the working tree).
+die () {
+	echo >&2 "$*"
+	exit 1
+}
+
+# Or it can make any necessary changes to the working tree and to the
+# index to bring them to the desired state when the tip of the current
+# branch is updated to the new commit, and exit with a zero status.
+#
+# For example, the hook can simply run git read-tree -u -m HEAD "$1"
+# in order to emulate git fetch that is run in the reverse direction
+# with git push, as the two-tree form of git read-tree -u -m is
+# essentially the same as git switch or git checkout that switches
+# branches while keeping the local changes in the working tree that do
+# not interfere with the difference between the branches.
+
+# The below is a more-or-less exact translation to shell of the C code
+# for the default behaviour for git's push-to-checkout hook defined in
+# the push_to_deploy() function in builtin/receive-pack.c.
+#
+# Note that the hook will be executed from the repository directory,
+# not from the working tree, so if you want to perform operations on
+# the working tree, you will have to adapt your code accordingly, e.g.
+# by adding "cd .." or using relative paths.
+
+if ! git update-index -q --ignore-submodules --refresh
+then
+	die "Up-to-date check failed"
+fi
+
+if ! git diff-files --quiet --ignore-submodules --
+then
+	die "Working directory has unstaged changes"
+fi
+
+# This is a rough translation of:
+#
+#   head_has_history() ? "HEAD" : EMPTY_TREE_SHA1_HEX
+if git cat-file -e HEAD 2>/dev/null
+then
+	head=HEAD
+else
+	head=$(git hash-object -t tree --stdin </dev/null)
+fi
+
+if ! git diff-index --quiet --cached --ignore-submodules $head --
+then
+	die "Working directory has staged changes"
+fi
+
+if ! git read-tree -u -m "$commit"
+then
+	die "Could not update working tree to new HEAD"
+fi
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/HOOKS/UPDATE.SAMPLE CODE IS BELOW
+#!/bin/sh
+#
+# An example hook script to block unannotated tags from entering.
+# Called by "git receive-pack" with arguments: refname sha1-old sha1-new
+#
+# To enable this hook, rename this file to "update".
+#
+# Config
+# ------
+# hooks.allowunannotated
+#   This boolean sets whether unannotated tags will be allowed into the
+#   repository.  By default they won't be.
+# hooks.allowdeletetag
+#   This boolean sets whether deleting tags will be allowed in the
+#   repository.  By default they won't be.
+# hooks.allowmodifytag
+#   This boolean sets whether a tag may be modified after creation. By default
+#   it won't be.
+# hooks.allowdeletebranch
+#   This boolean sets whether deleting branches will be allowed in the
+#   repository.  By default they won't be.
+# hooks.denycreatebranch
+#   This boolean sets whether remotely creating branches will be denied
+#   in the repository.  By default this is allowed.
+#
+
+# --- Command line
+refname="$1"
+oldrev="$2"
+newrev="$3"
+
+# --- Safety check
+if [ -z "$GIT_DIR" ]; then
+	echo "Don't run this script from the command line." >&2
+	echo " (if you want, you could supply GIT_DIR then run" >&2
+	echo "  $0 <ref> <oldrev> <newrev>)" >&2
+	exit 1
+fi
+
+if [ -z "$refname" -o -z "$oldrev" -o -z "$newrev" ]; then
+	echo "usage: $0 <ref> <oldrev> <newrev>" >&2
+	exit 1
+fi
+
+# --- Config
+allowunannotated=$(git config --type=bool hooks.allowunannotated)
+allowdeletebranch=$(git config --type=bool hooks.allowdeletebranch)
+denycreatebranch=$(git config --type=bool hooks.denycreatebranch)
+allowdeletetag=$(git config --type=bool hooks.allowdeletetag)
+allowmodifytag=$(git config --type=bool hooks.allowmodifytag)
+
+# check for no description
+projectdesc=$(sed -e '1q' "$GIT_DIR/description")
+case "$projectdesc" in
+"Unnamed repository"* | "")
+	echo "*** Project description file hasn't been set" >&2
+	exit 1
+	;;
+esac
+
+# --- Check types
+# if $newrev is 0000...0000, it's a commit to delete a ref.
+zero=$(git hash-object --stdin </dev/null | tr '[0-9a-f]' '0')
+if [ "$newrev" = "$zero" ]; then
+	newrev_type=delete
+else
+	newrev_type=$(git cat-file -t $newrev)
+fi
+
+case "$refname","$newrev_type" in
+	refs/tags/*,commit)
+		# un-annotated tag
+		short_refname=${refname##refs/tags/}
+		if [ "$allowunannotated" != "true" ]; then
+			echo "*** The un-annotated tag, $short_refname, is not allowed in this repository" >&2
+			echo "*** Use 'git tag [ -a | -s ]' for tags you want to propagate." >&2
+			exit 1
+		fi
+		;;
+	refs/tags/*,delete)
+		# delete tag
+		if [ "$allowdeletetag" != "true" ]; then
+			echo "*** Deleting a tag is not allowed in this repository" >&2
+			exit 1
+		fi
+		;;
+	refs/tags/*,tag)
+		# annotated tag
+		if [ "$allowmodifytag" != "true" ] && git rev-parse $refname > /dev/null 2>&1
+		then
+			echo "*** Tag '$refname' already exists." >&2
+			echo "*** Modifying a tag is not allowed in this repository." >&2
+			exit 1
+		fi
+		;;
+	refs/heads/*,commit)
+		# branch
+		if [ "$oldrev" = "$zero" -a "$denycreatebranch" = "true" ]; then
+			echo "*** Creating a branch is not allowed in this repository" >&2
+			exit 1
+		fi
+		;;
+	refs/heads/*,delete)
+		# delete branch
+		if [ "$allowdeletebranch" != "true" ]; then
+			echo "*** Deleting a branch is not allowed in this repository" >&2
+			exit 1
+		fi
+		;;
+	refs/remotes/*,commit)
+		# tracking branch
+		;;
+	refs/remotes/*,delete)
+		# delete tracking branch
+		if [ "$allowdeletebranch" != "true" ]; then
+			echo "*** Deleting a tracking branch is not allowed in this repository" >&2
+			exit 1
+		fi
+		;;
+	*)
+		# Anything else (is there anything else?)
+		echo "*** Update hook: unknown type of update to ref $refname of type $newrev_type" >&2
+		exit 1
+		;;
+esac
+
+# --- Finished
+exit 0
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GIT/INFO/EXCLUDE CODE IS BELOW
+# git ls-files --others --exclude-from=.git/info/exclude
+# Lines that start with '#' are comments.
+# For a project mostly in C, the following would be a good set of
+# exclude patterns (uncomment them if you want to use them):
+# *.[oa]
+# *~
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GITATTRIBUTES CODE IS BELOW
+# See https://git-scm.com/docs/gitattributes for more about git attribute files.
+
+# Mark the database schema as having been generated.
+db/schema.rb linguist-generated
+
+# Mark any vendored files as having been vendored.
+vendor/* linguist-vendored
+config/credentials/*.yml.enc diff=rails_credentials
+config/credentials.yml.enc diff=rails_credentials
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.GITIGNORE CODE IS BELOW
+# See https://help.github.com/articles/ignoring-files for more about ignoring files.
+#
+# If you find yourself ignoring temporary files generated by your text editor
+# or operating system, you probably want to add a global ignore instead:
+#   git config --global core.excludesfile '~/.gitignore_global'
+
+# Ignore bundler config.
+/.bundle
+
+# Ignore all environment files (except templates).
+/.env*
+!/.env*.erb
+
+# Ignore all logfiles and tempfiles.
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+
+# Ignore pidfiles, but keep the directory.
+/tmp/pids/*
+!/tmp/pids/
+!/tmp/pids/.keep
+
+# Ignore storage (uploaded files in development and any SQLite databases).
+/storage/*
+!/storage/.keep
+/tmp/storage/*
+!/tmp/storage/
+!/tmp/storage/.keep
+
+/public/assets
+
+# Ignore master key for decrypting credentials and more.
+/config/master.key
+
+/app/assets/builds/*
+!/app/assets/builds/.keep
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/.RUBY-VERSION CODE IS BELOW
+3.2.2
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/DOCKERFILE CODE IS BELOW
+# syntax = docker/dockerfile:1
+
+# Make sure RUBY_VERSION matches the Ruby version in .ruby-version and Gemfile
+ARG RUBY_VERSION=3.2.2
+FROM registry.docker.com/library/ruby:$RUBY_VERSION-slim as base
+
+# Rails app lives here
+WORKDIR /rails
+
+# Set production environment
+ENV RAILS_ENV="production" \
+    BUNDLE_DEPLOYMENT="1" \
+    BUNDLE_PATH="/usr/local/bundle" \
+    BUNDLE_WITHOUT="development"
+
+
+# Throw-away build stage to reduce size of final image
+FROM base as build
+
+# Install packages needed to build gems
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y build-essential git libpq-dev libvips pkg-config
+
+# Install application gems
+COPY Gemfile Gemfile.lock ./
+RUN bundle install && \
+    rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
+    bundle exec bootsnap precompile --gemfile
+
+# Copy application code
+COPY . .
+
+# Precompile bootsnap code for faster boot times
+RUN bundle exec bootsnap precompile app/ lib/
+
+# Precompiling assets for production without requiring secret RAILS_MASTER_KEY
+RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
+
+
+# Final stage for app image
+FROM base
+
+# Install packages needed for deployment
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y curl libvips postgresql-client && \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+
+# Copy built artifacts: gems, application
+COPY --from=build /usr/local/bundle /usr/local/bundle
+COPY --from=build /rails /rails
+
+# Run and own only the runtime files as a non-root user for security
+RUN useradd rails --create-home --shell /bin/bash && \
+    chown -R rails:rails db log storage tmp
+USER rails:rails
+
+# Entrypoint prepares the database.
+ENTRYPOINT ["/rails/bin/docker-entrypoint"]
+
+# Start the server by default, this can be overwritten at runtime
+EXPOSE 3000
+CMD ["./bin/rails", "server"]
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/GEMFILE CODE IS BELOW
+source "https://rubygems.org"
+
+ruby "3.2.2"
+
+# Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
+gem "rails", "~> 7.1.3", ">= 7.1.3.4"
+
+# The original asset pipeline for Rails [https://github.com/rails/sprockets-rails]
+gem "sprockets-rails"
+
+# Use postgresql as the database for Active Record
+gem "pg", "~> 1.1"
+
+# Use the Puma web server [https://github.com/puma/puma]
+gem "puma", ">= 5.0"
+
+# Use JavaScript with ESM import maps [https://github.com/rails/importmap-rails]
+gem "importmap-rails"
+
+# Hotwire's SPA-like page accelerator [https://turbo.hotwired.dev]
+gem "turbo-rails"
+
+# Hotwire's modest JavaScript framework [https://stimulus.hotwired.dev]
+gem "stimulus-rails"
+
+# Build JSON APIs with ease [https://github.com/rails/jbuilder]
+gem "jbuilder"
+
+# Use Redis adapter to run Action Cable in production
+gem "redis", ">= 4.0.1"
+
+# Use Kredis to get higher-level data types in Redis [https://github.com/rails/kredis]
+# gem "kredis"
+
+# Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
+# gem "bcrypt", "~> 3.1.7"
+
+# Windows does not include zoneinfo files, so bundle the tzinfo-data gem
+gem "tzinfo-data", platforms: %i[ windows jruby ]
+
+# Reduces boot times through caching; required in config/boot.rb
+gem "bootsnap", require: false
+
+# Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
+# gem "image_processing", "~> 1.2"
+
+group :development, :test do
+  # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
+  gem "debug", platforms: %i[ mri windows ]
+end
+
+group :development do
+  # Use console on exceptions pages [https://github.com/rails/web-console]
+  gem "web-console"
+  gem "rails_live_reload"
+
+  #Add speed badges [https://github.com/MiniProfiler/rack-mini-profiler]
+  # gem "rack-mini-profiler"
+
+  # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
+  # gem "spring"
+end
+
+group :test do
+  # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
+  gem "capybara"
+  gem "selenium-webdriver"
+end
+
+gem 'tailwindcss-rails'
+
+gem 'bcrypt', '~> 3.1.7'
+
+gem 'mailgun-ruby', '~>1.2.0'
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/GEMFILE.LOCK CODE IS BELOW
+GEM
+  remote: https://rubygems.org/
+  specs:
+    actioncable (7.1.3.4)
+      actionpack (= 7.1.3.4)
+      activesupport (= 7.1.3.4)
+      nio4r (~> 2.0)
+      websocket-driver (>= 0.6.1)
+      zeitwerk (~> 2.6)
+    actionmailbox (7.1.3.4)
+      actionpack (= 7.1.3.4)
+      activejob (= 7.1.3.4)
+      activerecord (= 7.1.3.4)
+      activestorage (= 7.1.3.4)
+      activesupport (= 7.1.3.4)
+      mail (>= 2.7.1)
+      net-imap
+      net-pop
+      net-smtp
+    actionmailer (7.1.3.4)
+      actionpack (= 7.1.3.4)
+      actionview (= 7.1.3.4)
+      activejob (= 7.1.3.4)
+      activesupport (= 7.1.3.4)
+      mail (~> 2.5, >= 2.5.4)
+      net-imap
+      net-pop
+      net-smtp
+      rails-dom-testing (~> 2.2)
+    actionpack (7.1.3.4)
+      actionview (= 7.1.3.4)
+      activesupport (= 7.1.3.4)
+      nokogiri (>= 1.8.5)
+      racc
+      rack (>= 2.2.4)
+      rack-session (>= 1.0.1)
+      rack-test (>= 0.6.3)
+      rails-dom-testing (~> 2.2)
+      rails-html-sanitizer (~> 1.6)
+    actiontext (7.1.3.4)
+      actionpack (= 7.1.3.4)
+      activerecord (= 7.1.3.4)
+      activestorage (= 7.1.3.4)
+      activesupport (= 7.1.3.4)
+      globalid (>= 0.6.0)
+      nokogiri (>= 1.8.5)
+    actionview (7.1.3.4)
+      activesupport (= 7.1.3.4)
+      builder (~> 3.1)
+      erubi (~> 1.11)
+      rails-dom-testing (~> 2.2)
+      rails-html-sanitizer (~> 1.6)
+    activejob (7.1.3.4)
+      activesupport (= 7.1.3.4)
+      globalid (>= 0.3.6)
+    activemodel (7.1.3.4)
+      activesupport (= 7.1.3.4)
+    activerecord (7.1.3.4)
+      activemodel (= 7.1.3.4)
+      activesupport (= 7.1.3.4)
+      timeout (>= 0.4.0)
+    activestorage (7.1.3.4)
+      actionpack (= 7.1.3.4)
+      activejob (= 7.1.3.4)
+      activerecord (= 7.1.3.4)
+      activesupport (= 7.1.3.4)
+      marcel (~> 1.0)
+    activesupport (7.1.3.4)
+      base64
+      bigdecimal
+      concurrent-ruby (~> 1.0, >= 1.0.2)
+      connection_pool (>= 2.2.5)
+      drb
+      i18n (>= 1.6, < 2)
+      minitest (>= 5.1)
+      mutex_m
+      tzinfo (~> 2.0)
+    addressable (2.8.7)
+      public_suffix (>= 2.0.2, < 7.0)
+    base64 (0.2.0)
+    bcrypt (3.1.20)
+    bigdecimal (3.1.8)
+    bindex (0.8.1)
+    bootsnap (1.18.3)
+      msgpack (~> 1.2)
+    builder (3.3.0)
+    capybara (3.40.0)
+      addressable
+      matrix
+      mini_mime (>= 0.1.3)
+      nokogiri (~> 1.11)
+      rack (>= 1.6.0)
+      rack-test (>= 0.6.3)
+      regexp_parser (>= 1.5, < 3.0)
+      xpath (~> 3.2)
+    concurrent-ruby (1.3.3)
+    connection_pool (2.4.1)
+    crass (1.0.6)
+    date (3.3.4)
+    debug (1.9.2)
+      irb (~> 1.10)
+      reline (>= 0.3.8)
+    domain_name (0.6.20240107)
+    drb (2.2.1)
+    erubi (1.13.0)
+    ffi (1.17.0-aarch64-linux-gnu)
+    ffi (1.17.0-arm-linux-gnu)
+    ffi (1.17.0-arm64-darwin)
+    ffi (1.17.0-x86-linux-gnu)
+    ffi (1.17.0-x86_64-darwin)
+    ffi (1.17.0-x86_64-linux-gnu)
+    globalid (1.2.1)
+      activesupport (>= 6.1)
+    http-accept (1.7.0)
+    http-cookie (1.0.6)
+      domain_name (~> 0.5)
+    i18n (1.14.5)
+      concurrent-ruby (~> 1.0)
+    importmap-rails (2.0.1)
+      actionpack (>= 6.0.0)
+      activesupport (>= 6.0.0)
+      railties (>= 6.0.0)
+    io-console (0.7.2)
+    irb (1.14.0)
+      rdoc (>= 4.0.0)
+      reline (>= 0.4.2)
+    jbuilder (2.12.0)
+      actionview (>= 5.0.0)
+      activesupport (>= 5.0.0)
+    listen (3.9.0)
+      rb-fsevent (~> 0.10, >= 0.10.3)
+      rb-inotify (~> 0.9, >= 0.9.10)
+    logger (1.6.0)
+    loofah (2.22.0)
+      crass (~> 1.0.2)
+      nokogiri (>= 1.12.0)
+    mail (2.8.1)
+      mini_mime (>= 0.1.1)
+      net-imap
+      net-pop
+      net-smtp
+    mailgun-ruby (1.2.14)
+      rest-client (>= 2.0.2)
+    marcel (1.0.4)
+    matrix (0.4.2)
+    mime-types (3.5.2)
+      mime-types-data (~> 3.2015)
+    mime-types-data (3.2024.0702)
+    mini_mime (1.1.5)
+    minitest (5.24.1)
+    msgpack (1.7.2)
+    mutex_m (0.2.0)
+    net-imap (0.4.14)
+      date
+      net-protocol
+    net-pop (0.1.2)
+      net-protocol
+    net-protocol (0.2.2)
+      timeout
+    net-smtp (0.5.0)
+      net-protocol
+    netrc (0.11.0)
+    nio4r (2.7.3)
+    nokogiri (1.16.6-aarch64-linux)
+      racc (~> 1.4)
+    nokogiri (1.16.6-arm-linux)
+      racc (~> 1.4)
+    nokogiri (1.16.6-arm64-darwin)
+      racc (~> 1.4)
+    nokogiri (1.16.6-x86-linux)
+      racc (~> 1.4)
+    nokogiri (1.16.6-x86_64-darwin)
+      racc (~> 1.4)
+    nokogiri (1.16.6-x86_64-linux)
+      racc (~> 1.4)
+    pg (1.5.6)
+    psych (5.1.2)
+      stringio
+    public_suffix (6.0.0)
+    puma (6.4.2)
+      nio4r (~> 2.0)
+    racc (1.8.0)
+    rack (3.1.7)
+    rack-session (2.0.0)
+      rack (>= 3.0.0)
+    rack-test (2.1.0)
+      rack (>= 1.3)
+    rackup (2.1.0)
+      rack (>= 3)
+      webrick (~> 1.8)
+    rails (7.1.3.4)
+      actioncable (= 7.1.3.4)
+      actionmailbox (= 7.1.3.4)
+      actionmailer (= 7.1.3.4)
+      actionpack (= 7.1.3.4)
+      actiontext (= 7.1.3.4)
+      actionview (= 7.1.3.4)
+      activejob (= 7.1.3.4)
+      activemodel (= 7.1.3.4)
+      activerecord (= 7.1.3.4)
+      activestorage (= 7.1.3.4)
+      activesupport (= 7.1.3.4)
+      bundler (>= 1.15.0)
+      railties (= 7.1.3.4)
+    rails-dom-testing (2.2.0)
+      activesupport (>= 5.0.0)
+      minitest
+      nokogiri (>= 1.6)
+    rails-html-sanitizer (1.6.0)
+      loofah (~> 2.21)
+      nokogiri (~> 1.14)
+    rails_live_reload (0.3.6)
+      listen
+      nio4r
+      railties
+      websocket-driver
+    railties (7.1.3.4)
+      actionpack (= 7.1.3.4)
+      activesupport (= 7.1.3.4)
+      irb
+      rackup (>= 1.0.0)
+      rake (>= 12.2)
+      thor (~> 1.0, >= 1.2.2)
+      zeitwerk (~> 2.6)
+    rake (13.2.1)
+    rb-fsevent (0.11.2)
+    rb-inotify (0.11.1)
+      ffi (~> 1.0)
+    rdoc (6.7.0)
+      psych (>= 4.0.0)
+    redis (5.2.0)
+      redis-client (>= 0.22.0)
+    redis-client (0.22.2)
+      connection_pool
+    regexp_parser (2.9.2)
+    reline (0.5.9)
+      io-console (~> 0.5)
+    rest-client (2.1.0)
+      http-accept (>= 1.7.0, < 2.0)
+      http-cookie (>= 1.0.2, < 2.0)
+      mime-types (>= 1.16, < 4.0)
+      netrc (~> 0.8)
+    rexml (3.3.1)
+      strscan
+    rubyzip (2.3.2)
+    selenium-webdriver (4.22.0)
+      base64 (~> 0.2)
+      logger (~> 1.4)
+      rexml (~> 3.2, >= 3.2.5)
+      rubyzip (>= 1.2.2, < 3.0)
+      websocket (~> 1.0)
+    sprockets (4.2.1)
+      concurrent-ruby (~> 1.0)
+      rack (>= 2.2.4, < 4)
+    sprockets-rails (3.5.1)
+      actionpack (>= 6.1)
+      activesupport (>= 6.1)
+      sprockets (>= 3.0.0)
+    stimulus-rails (1.3.3)
+      railties (>= 6.0.0)
+    stringio (3.1.1)
+    strscan (3.1.0)
+    tailwindcss-rails (2.6.1)
+      railties (>= 7.0.0)
+    tailwindcss-rails (2.6.1-aarch64-linux)
+      railties (>= 7.0.0)
+    tailwindcss-rails (2.6.1-arm-linux)
+      railties (>= 7.0.0)
+    tailwindcss-rails (2.6.1-arm64-darwin)
+      railties (>= 7.0.0)
+    tailwindcss-rails (2.6.1-x86_64-darwin)
+      railties (>= 7.0.0)
+    tailwindcss-rails (2.6.1-x86_64-linux)
+      railties (>= 7.0.0)
+    thor (1.3.1)
+    timeout (0.4.1)
+    turbo-rails (2.0.5)
+      actionpack (>= 6.0.0)
+      activejob (>= 6.0.0)
+      railties (>= 6.0.0)
+    tzinfo (2.0.6)
+      concurrent-ruby (~> 1.0)
+    web-console (4.2.1)
+      actionview (>= 6.0.0)
+      activemodel (>= 6.0.0)
+      bindex (>= 0.4.0)
+      railties (>= 6.0.0)
+    webrick (1.8.1)
+    websocket (1.2.11)
+    websocket-driver (0.7.6)
+      websocket-extensions (>= 0.1.0)
+    websocket-extensions (0.1.5)
+    xpath (3.2.0)
+      nokogiri (~> 1.8)
+    zeitwerk (2.6.16)
+
+PLATFORMS
+  aarch64-linux
+  arm-linux
+  arm64-darwin
+  x86-linux
+  x86_64-darwin
+  x86_64-linux
+
+DEPENDENCIES
+  bcrypt (~> 3.1.7)
+  bootsnap
+  capybara
+  debug
+  importmap-rails
+  jbuilder
+  mailgun-ruby (~> 1.2.0)
+  pg (~> 1.1)
+  puma (>= 5.0)
+  rails (~> 7.1.3, >= 7.1.3.4)
+  rails_live_reload
+  redis (>= 4.0.1)
+  selenium-webdriver
+  sprockets-rails
+  stimulus-rails
+  tailwindcss-rails
+  turbo-rails
+  tzinfo-data
+  web-console
+
+RUBY VERSION
+   ruby 3.2.2p53
+
+BUNDLED WITH
+   2.5.3
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/PROCFILE.DEV CODE IS BELOW
+web: bin/rails server
+css: bin/rails tailwindcss:watch
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/README.MD CODE IS BELOW
+# README
+
+This README would normally document whatever steps are necessary to get the
+application up and running.
+
+Things you may want to cover:
+
+* Ruby version
+
+* System dependencies
+
+* Configuration
+
+* Database creation
+
+* Database initialization
+
+* How to run the test suite
+
+* Services (job queues, cache servers, search engines, etc.)
+
+* Deployment instructions
+
+* ...
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/RAKEFILE CODE IS BELOW
+# Add your own tasks in files placed in lib/tasks ending in .rake,
+# for example lib/tasks/capistrano.rake, and they will automatically be available to Rake.
+
+require_relative "config/application"
+
+Rails.application.load_tasks
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/ASSETS/BUILDS/.KEEP CODE IS BELOW
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/ASSETS/BUILDS/TAILWIND.CSS CODE IS BELOW
+/*! tailwindcss v3.4.4 | MIT License | https://tailwindcss.com*/*,:after,:before{border:0 solid #e5e7eb;box-sizing:border-box}:after,:before{--tw-content:""}:host,html{-webkit-text-size-adjust:100%;font-feature-settings:normal;-webkit-tap-highlight-color:transparent;font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;font-variation-settings:normal;line-height:1.5;-moz-tab-size:4;-o-tab-size:4;tab-size:4}body{line-height:inherit;margin:0}hr{border-top-width:1px;color:inherit;height:0}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-feature-settings:normal;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-size:1em;font-variation-settings:normal}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:initial}sub{bottom:-.25em}sup{top:-.5em}table{border-collapse:collapse;border-color:inherit;text-indent:0}button,input,optgroup,select,textarea{font-feature-settings:inherit;color:inherit;font-family:inherit;font-size:100%;font-variation-settings:inherit;font-weight:inherit;letter-spacing:inherit;line-height:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:initial;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:initial}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{color:#9ca3af;opacity:1}input::placeholder,textarea::placeholder{color:#9ca3af;opacity:1}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{height:auto;max-width:100%}[hidden]{display:none}[multiple],[type=date],[type=datetime-local],[type=email],[type=month],[type=number],[type=password],[type=search],[type=tel],[type=text],[type=time],[type=url],[type=week],select,textarea{--tw-shadow:0 0 #0000;-webkit-appearance:none;-moz-appearance:none;appearance:none;background-color:#fff;border-color:#6b7280;border-radius:0;border-width:1px;font-size:1rem;line-height:1.5rem;padding:.5rem .75rem}[multiple]:focus,[type=date]:focus,[type=datetime-local]:focus,[type=email]:focus,[type=month]:focus,[type=number]:focus,[type=password]:focus,[type=search]:focus,[type=tel]:focus,[type=text]:focus,[type=time]:focus,[type=url]:focus,[type=week]:focus,select:focus,textarea:focus{--tw-ring-inset:var(--tw-empty,/*!*/ /*!*/);--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:#2563eb;--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);border-color:#2563eb;box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);outline:2px solid #0000;outline-offset:2px}input::-moz-placeholder,textarea::-moz-placeholder{color:#6b7280;opacity:1}input::placeholder,textarea::placeholder{color:#6b7280;opacity:1}::-webkit-datetime-edit-fields-wrapper{padding:0}::-webkit-date-and-time-value{min-height:1.5em}::-webkit-datetime-edit,::-webkit-datetime-edit-day-field,::-webkit-datetime-edit-hour-field,::-webkit-datetime-edit-meridiem-field,::-webkit-datetime-edit-millisecond-field,::-webkit-datetime-edit-minute-field,::-webkit-datetime-edit-month-field,::-webkit-datetime-edit-second-field,::-webkit-datetime-edit-year-field{padding-bottom:0;padding-top:0}select{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");background-position:right .5rem center;background-repeat:no-repeat;background-size:1.5em 1.5em;padding-right:2.5rem;-webkit-print-color-adjust:exact;print-color-adjust:exact}[multiple]{background-image:none;background-position:0 0;background-repeat:unset;background-size:initial;padding-right:.75rem;-webkit-print-color-adjust:unset;print-color-adjust:unset}[type=checkbox],[type=radio]{--tw-shadow:0 0 #0000;-webkit-appearance:none;-moz-appearance:none;appearance:none;background-color:#fff;background-origin:border-box;border-color:#6b7280;border-width:1px;color:#2563eb;display:inline-block;flex-shrink:0;height:1rem;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;-webkit-user-select:none;-moz-user-select:none;user-select:none;vertical-align:middle;width:1rem}[type=checkbox]{border-radius:0}[type=radio]{border-radius:100%}[type=checkbox]:focus,[type=radio]:focus{--tw-ring-inset:var(--tw-empty,/*!*/ /*!*/);--tw-ring-offset-width:2px;--tw-ring-offset-color:#fff;--tw-ring-color:#2563eb;--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);outline:2px solid #0000;outline-offset:2px}[type=checkbox]:checked,[type=radio]:checked{background-color:currentColor;background-position:50%;background-repeat:no-repeat;background-size:100% 100%;border-color:#0000}[type=checkbox]:checked{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z'/%3E%3C/svg%3E")}[type=radio]:checked{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E")}[type=checkbox]:checked:focus,[type=checkbox]:checked:hover,[type=checkbox]:indeterminate,[type=radio]:checked:focus,[type=radio]:checked:hover{background-color:currentColor;border-color:#0000}[type=checkbox]:indeterminate{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3E%3Cpath stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 8h8'/%3E%3C/svg%3E");background-position:50%;background-repeat:no-repeat;background-size:100% 100%}[type=checkbox]:indeterminate:focus,[type=checkbox]:indeterminate:hover{background-color:currentColor;border-color:#0000}[type=file]{background:unset;border-color:inherit;border-radius:0;border-width:0;font-size:unset;line-height:inherit;padding:0}[type=file]:focus{outline:1px solid ButtonText;outline:1px auto -webkit-focus-ring-color}body{font-family:Montserrat,sans-serif}h1,h2,h3,h4,h5,h6{font-family:Newsreader,serif}*,::backdrop,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:#2189fd80;--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }.container{width:100%}@media (min-width:640px){.container{max-width:640px}}@media (min-width:768px){.container{max-width:768px}}@media (min-width:1024px){.container{max-width:1024px}}@media (min-width:1280px){.container{max-width:1280px}}@media (min-width:1536px){.container{max-width:1536px}}.prose{color:var(--tw-prose-body);max-width:65ch}.prose :where([class~=lead]):not(:where([class~=not-prose] *)){color:var(--tw-prose-lead);font-size:1.25em;line-height:1.6;margin-bottom:1.2em;margin-top:1.2em}.prose :where(a):not(:where([class~=not-prose] *)){color:var(--tw-prose-links);font-weight:500;text-decoration:underline}.prose :where(strong):not(:where([class~=not-prose] *)){color:var(--tw-prose-bold);font-weight:600}.prose :where(a strong):not(:where([class~=not-prose] *)){color:inherit}.prose :where(blockquote strong):not(:where([class~=not-prose] *)){color:inherit}.prose :where(thead th strong):not(:where([class~=not-prose] *)){color:inherit}.prose :where(ol):not(:where([class~=not-prose] *)){list-style-type:decimal;margin-bottom:1.25em;margin-top:1.25em;padding-left:1.625em}.prose :where(ol[type=A]):not(:where([class~=not-prose] *)){list-style-type:upper-alpha}.prose :where(ol[type=a]):not(:where([class~=not-prose] *)){list-style-type:lower-alpha}.prose :where(ol[type=A s]):not(:where([class~=not-prose] *)){list-style-type:upper-alpha}.prose :where(ol[type=a s]):not(:where([class~=not-prose] *)){list-style-type:lower-alpha}.prose :where(ol[type=I]):not(:where([class~=not-prose] *)){list-style-type:upper-roman}.prose :where(ol[type=i]):not(:where([class~=not-prose] *)){list-style-type:lower-roman}.prose :where(ol[type=I s]):not(:where([class~=not-prose] *)){list-style-type:upper-roman}.prose :where(ol[type=i s]):not(:where([class~=not-prose] *)){list-style-type:lower-roman}.prose :where(ol[type="1"]):not(:where([class~=not-prose] *)){list-style-type:decimal}.prose :where(ul):not(:where([class~=not-prose] *)){list-style-type:disc;margin-bottom:1.25em;margin-top:1.25em;padding-left:1.625em}.prose :where(ol>li):not(:where([class~=not-prose] *))::marker{color:var(--tw-prose-counters);font-weight:400}.prose :where(ul>li):not(:where([class~=not-prose] *))::marker{color:var(--tw-prose-bullets)}.prose :where(hr):not(:where([class~=not-prose] *)){border-color:var(--tw-prose-hr);border-top-width:1px;margin-bottom:3em;margin-top:3em}.prose :where(blockquote):not(:where([class~=not-prose] *)){border-left-color:var(--tw-prose-quote-borders);border-left-width:.25rem;color:var(--tw-prose-quotes);font-style:italic;font-weight:500;margin-bottom:1.6em;margin-top:1.6em;padding-left:1em;quotes:"\201C""\201D""\2018""\2019"}.prose :where(blockquote p:first-of-type):not(:where([class~=not-prose] *)):before{content:open-quote}.prose :where(blockquote p:last-of-type):not(:where([class~=not-prose] *)):after{content:close-quote}.prose :where(h1):not(:where([class~=not-prose] *)){color:var(--tw-prose-headings);font-size:2.25em;font-weight:800;line-height:1.1111111;margin-bottom:.8888889em;margin-top:0}.prose :where(h1 strong):not(:where([class~=not-prose] *)){color:inherit;font-weight:900}.prose :where(h2):not(:where([class~=not-prose] *)){color:var(--tw-prose-headings);font-size:1.5em;font-weight:700;line-height:1.3333333;margin-bottom:1em;margin-top:2em}.prose :where(h2 strong):not(:where([class~=not-prose] *)){color:inherit;font-weight:800}.prose :where(h3):not(:where([class~=not-prose] *)){color:var(--tw-prose-headings);font-size:1.25em;font-weight:600;line-height:1.6;margin-bottom:.6em;margin-top:1.6em}.prose :where(h3 strong):not(:where([class~=not-prose] *)){color:inherit;font-weight:700}.prose :where(h4):not(:where([class~=not-prose] *)){color:var(--tw-prose-headings);font-weight:600;line-height:1.5;margin-bottom:.5em;margin-top:1.5em}.prose :where(h4 strong):not(:where([class~=not-prose] *)){color:inherit;font-weight:700}.prose :where(img):not(:where([class~=not-prose] *)){margin-bottom:2em;margin-top:2em}.prose :where(figure>*):not(:where([class~=not-prose] *)){margin-bottom:0;margin-top:0}.prose :where(figcaption):not(:where([class~=not-prose] *)){color:var(--tw-prose-captions);font-size:.875em;line-height:1.4285714;margin-top:.8571429em}.prose :where(code):not(:where([class~=not-prose] *)){color:var(--tw-prose-code);font-size:.875em;font-weight:600}.prose :where(code):not(:where([class~=not-prose] *)):before{content:"`"}.prose :where(code):not(:where([class~=not-prose] *)):after{content:"`"}.prose :where(a code):not(:where([class~=not-prose] *)){color:inherit}.prose :where(h1 code):not(:where([class~=not-prose] *)){color:inherit}.prose :where(h2 code):not(:where([class~=not-prose] *)){color:inherit;font-size:.875em}.prose :where(h3 code):not(:where([class~=not-prose] *)){color:inherit;font-size:.9em}.prose :where(h4 code):not(:where([class~=not-prose] *)){color:inherit}.prose :where(blockquote code):not(:where([class~=not-prose] *)){color:inherit}.prose :where(thead th code):not(:where([class~=not-prose] *)){color:inherit}.prose :where(pre):not(:where([class~=not-prose] *)){background-color:var(--tw-prose-pre-bg);border-radius:.375rem;color:var(--tw-prose-pre-code);font-size:.875em;font-weight:400;line-height:1.7142857;margin-bottom:1.7142857em;margin-top:1.7142857em;overflow-x:auto;padding:.8571429em 1.1428571em}.prose :where(pre code):not(:where([class~=not-prose] *)){background-color:initial;border-radius:0;border-width:0;color:inherit;font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;padding:0}.prose :where(pre code):not(:where([class~=not-prose] *)):before{content:none}.prose :where(pre code):not(:where([class~=not-prose] *)):after{content:none}.prose :where(table):not(:where([class~=not-prose] *)){font-size:.875em;line-height:1.7142857;margin-bottom:2em;margin-top:2em;table-layout:auto;text-align:left;width:100%}.prose :where(thead):not(:where([class~=not-prose] *)){border-bottom-color:var(--tw-prose-th-borders);border-bottom-width:1px}.prose :where(thead th):not(:where([class~=not-prose] *)){color:var(--tw-prose-headings);font-weight:600;padding-bottom:.5714286em;padding-left:.5714286em;padding-right:.5714286em;vertical-align:bottom}.prose :where(tbody tr):not(:where([class~=not-prose] *)){border-bottom-color:var(--tw-prose-td-borders);border-bottom-width:1px}.prose :where(tbody tr:last-child):not(:where([class~=not-prose] *)){border-bottom-width:0}.prose :where(tbody td):not(:where([class~=not-prose] *)){vertical-align:initial}.prose :where(tfoot):not(:where([class~=not-prose] *)){border-top-color:var(--tw-prose-th-borders);border-top-width:1px}.prose :where(tfoot td):not(:where([class~=not-prose] *)){vertical-align:top}.prose{--tw-prose-body:#374151;--tw-prose-headings:#111827;--tw-prose-lead:#4b5563;--tw-prose-links:#111827;--tw-prose-bold:#111827;--tw-prose-counters:#6b7280;--tw-prose-bullets:#d1d5db;--tw-prose-hr:#e5e7eb;--tw-prose-quotes:#111827;--tw-prose-quote-borders:#e5e7eb;--tw-prose-captions:#6b7280;--tw-prose-code:#111827;--tw-prose-pre-code:#e5e7eb;--tw-prose-pre-bg:#1f2937;--tw-prose-th-borders:#d1d5db;--tw-prose-td-borders:#e5e7eb;--tw-prose-invert-body:#d1d5db;--tw-prose-invert-headings:#fff;--tw-prose-invert-lead:#9ca3af;--tw-prose-invert-links:#fff;--tw-prose-invert-bold:#fff;--tw-prose-invert-counters:#9ca3af;--tw-prose-invert-bullets:#4b5563;--tw-prose-invert-hr:#374151;--tw-prose-invert-quotes:#f3f4f6;--tw-prose-invert-quote-borders:#374151;--tw-prose-invert-captions:#9ca3af;--tw-prose-invert-code:#fff;--tw-prose-invert-pre-code:#d1d5db;--tw-prose-invert-pre-bg:#00000080;--tw-prose-invert-th-borders:#4b5563;--tw-prose-invert-td-borders:#374151;font-size:1rem;line-height:1.75}.prose :where(p):not(:where([class~=not-prose] *)){margin-bottom:1.25em;margin-top:1.25em}.prose :where(video):not(:where([class~=not-prose] *)){margin-bottom:2em;margin-top:2em}.prose :where(figure):not(:where([class~=not-prose] *)){margin-bottom:2em;margin-top:2em}.prose :where(li):not(:where([class~=not-prose] *)){margin-bottom:.5em;margin-top:.5em}.prose :where(ol>li):not(:where([class~=not-prose] *)){padding-left:.375em}.prose :where(ul>li):not(:where([class~=not-prose] *)){padding-left:.375em}.prose :where(.prose>ul>li p):not(:where([class~=not-prose] *)){margin-bottom:.75em;margin-top:.75em}.prose :where(.prose>ul>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.25em}.prose :where(.prose>ul>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.25em}.prose :where(.prose>ol>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.25em}.prose :where(.prose>ol>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.25em}.prose :where(ul ul,ul ol,ol ul,ol ol):not(:where([class~=not-prose] *)){margin-bottom:.75em;margin-top:.75em}.prose :where(hr+*):not(:where([class~=not-prose] *)){margin-top:0}.prose :where(h2+*):not(:where([class~=not-prose] *)){margin-top:0}.prose :where(h3+*):not(:where([class~=not-prose] *)){margin-top:0}.prose :where(h4+*):not(:where([class~=not-prose] *)){margin-top:0}.prose :where(thead th:first-child):not(:where([class~=not-prose] *)){padding-left:0}.prose :where(thead th:last-child):not(:where([class~=not-prose] *)){padding-right:0}.prose :where(tbody td,tfoot td):not(:where([class~=not-prose] *)){padding:.5714286em}.prose :where(tbody td:first-child,tfoot td:first-child):not(:where([class~=not-prose] *)){padding-left:0}.prose :where(tbody td:last-child,tfoot td:last-child):not(:where([class~=not-prose] *)){padding-right:0}.prose :where(.prose>:first-child):not(:where([class~=not-prose] *)){margin-top:0}.prose :where(.prose>:last-child):not(:where([class~=not-prose] *)){margin-bottom:0}.prose-sm :where(.prose>ul>li p):not(:where([class~=not-prose] *)){margin-bottom:.5714286em;margin-top:.5714286em}.prose-sm :where(.prose>ul>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.1428571em}.prose-sm :where(.prose>ul>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.1428571em}.prose-sm :where(.prose>ol>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.1428571em}.prose-sm :where(.prose>ol>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.1428571em}.prose-sm :where(.prose>:first-child):not(:where([class~=not-prose] *)){margin-top:0}.prose-sm :where(.prose>:last-child):not(:where([class~=not-prose] *)){margin-bottom:0}.prose-base :where(.prose>ul>li p):not(:where([class~=not-prose] *)){margin-bottom:.75em;margin-top:.75em}.prose-base :where(.prose>ul>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.25em}.prose-base :where(.prose>ul>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.25em}.prose-base :where(.prose>ol>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.25em}.prose-base :where(.prose>ol>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.25em}.prose-base :where(.prose>:first-child):not(:where([class~=not-prose] *)){margin-top:0}.prose-base :where(.prose>:last-child):not(:where([class~=not-prose] *)){margin-bottom:0}.prose-lg :where(.prose>ul>li p):not(:where([class~=not-prose] *)){margin-bottom:.8888889em;margin-top:.8888889em}.prose-lg :where(.prose>ul>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.3333333em}.prose-lg :where(.prose>ul>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.3333333em}.prose-lg :where(.prose>ol>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.3333333em}.prose-lg :where(.prose>ol>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.3333333em}.prose-lg :where(.prose>:first-child):not(:where([class~=not-prose] *)){margin-top:0}.prose-lg :where(.prose>:last-child):not(:where([class~=not-prose] *)){margin-bottom:0}.prose-xl :where(.prose>ul>li p):not(:where([class~=not-prose] *)){margin-bottom:.8em;margin-top:.8em}.prose-xl :where(.prose>ul>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.2em}.prose-xl :where(.prose>ul>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.2em}.prose-xl :where(.prose>ol>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.2em}.prose-xl :where(.prose>ol>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.2em}.prose-xl :where(.prose>:first-child):not(:where([class~=not-prose] *)){margin-top:0}.prose-xl :where(.prose>:last-child):not(:where([class~=not-prose] *)){margin-bottom:0}.prose-2xl :where(.prose>ul>li p):not(:where([class~=not-prose] *)){margin-bottom:.8333333em;margin-top:.8333333em}.prose-2xl :where(.prose>ul>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.3333333em}.prose-2xl :where(.prose>ul>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.3333333em}.prose-2xl :where(.prose>ol>li>:first-child):not(:where([class~=not-prose] *)){margin-top:1.3333333em}.prose-2xl :where(.prose>ol>li>:last-child):not(:where([class~=not-prose] *)){margin-bottom:1.3333333em}.prose-2xl :where(.prose>:first-child):not(:where([class~=not-prose] *)){margin-top:0}.prose-2xl :where(.prose>:last-child):not(:where([class~=not-prose] *)){margin-bottom:0}.static{position:static}.relative{position:relative}.mx-auto{margin-left:auto;margin-right:auto}.mb-16{margin-bottom:4rem}.mb-2{margin-bottom:.5rem}.mb-4{margin-bottom:1rem}.mb-8{margin-bottom:2rem}.ml-4{margin-left:1rem}.ml-64{margin-left:16rem}.mt-2{margin-top:.5rem}.mt-4{margin-top:1rem}.inline-block{display:inline-block}.inline{display:inline}.flex{display:flex}.inline-flex{display:inline-flex}.grid{display:grid}.h-8{height:2rem}.h-screen{height:100vh}.min-h-screen{min-height:100vh}.w-8{width:2rem}.w-full{width:100%}.max-w-4xl{max-width:56rem}.max-w-none{max-width:none}.flex-1{flex:1 1 0%}.flex-grow-0{flex-grow:0}.grow{flex-grow:1}.transform{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}.flex-col{flex-direction:column}.items-center{align-items:center}.items-stretch{align-items:stretch}.justify-start{justify-content:flex-start}.gap-2{gap:.5rem}.gap-4{gap:1rem}.gap-8{gap:2rem}.space-x-6>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-left:calc(1.5rem*(1 - var(--tw-space-x-reverse)));margin-right:calc(1.5rem*var(--tw-space-x-reverse))}.space-y-4>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-bottom:calc(1rem*var(--tw-space-y-reverse));margin-top:calc(1rem*(1 - var(--tw-space-y-reverse)))}.overflow-hidden{overflow:hidden}.overflow-y-auto{overflow-y:auto}.rounded{border-radius:.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}.rounded-l{border-bottom-left-radius:.25rem;border-top-left-radius:.25rem}.rounded-r{border-bottom-right-radius:.25rem;border-top-right-radius:.25rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-cream-500\/20{border-color:#ebe9c433}.border-darkBlue-500{--tw-border-opacity:1;border-color:rgb(25 9 51/var(--tw-border-opacity))}.border-red-400{--tw-border-opacity:1;border-color:rgb(248 117 73/var(--tw-border-opacity))}.bg-blue-500{--tw-bg-opacity:1;background-color:rgb(33 137 253/var(--tw-bg-opacity))}.bg-cream-500{--tw-bg-opacity:1;background-color:rgb(235 233 196/var(--tw-bg-opacity))}.bg-cream-500\/20{background-color:#ebe9c433}.bg-darkBlue-500{--tw-bg-opacity:1;background-color:rgb(25 9 51/var(--tw-bg-opacity))}.bg-green-500{--tw-bg-opacity:1;background-color:rgb(57 197 79/var(--tw-bg-opacity))}.bg-red-100{--tw-bg-opacity:1;background-color:rgb(254 215 189/var(--tw-bg-opacity))}.bg-red-500{--tw-bg-opacity:1;background-color:rgb(246 85 36/var(--tw-bg-opacity))}.fill-cream-500{fill:#ebe9c4}.fill-darkBlue-500{fill:#190933}.p-2{padding:.5rem}.p-4{padding:1rem}.p-6{padding:1.5rem}.p-8{padding:2rem}.px-3{padding-left:.75rem;padding-right:.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-8{padding-left:2rem;padding-right:2rem}.py-1{padding-bottom:.25rem;padding-top:.25rem}.py-2{padding-bottom:.5rem;padding-top:.5rem}.py-3{padding-bottom:.75rem;padding-top:.75rem}.py-4{padding-bottom:1rem;padding-top:1rem}.pb-8{padding-bottom:2rem}.text-center{text-align:center}.font-header-font{font-family:Newsreader,serif}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-5xl{font-size:3rem;line-height:1}.text-sm{font-size:.875rem;line-height:1.25rem}.font-bold{font-weight:700}.font-light{font-weight:300}.font-medium{font-weight:500}.font-semibold{font-weight:600}.italic{font-style:italic}.leading-relaxed{line-height:1.625}.text-blue-500{--tw-text-opacity:1;color:rgb(33 137 253/var(--tw-text-opacity))}.text-cream-500{--tw-text-opacity:1;color:rgb(235 233 196/var(--tw-text-opacity))}.text-darkBlue-500{--tw-text-opacity:1;color:rgb(25 9 51/var(--tw-text-opacity))}.text-gray-500{--tw-text-opacity:1;color:rgb(107 114 128/var(--tw-text-opacity))}.text-red-700{--tw-text-opacity:1;color:rgb(185 28 28/var(--tw-text-opacity))}.text-white-500{--tw-text-opacity:1;color:rgb(247 246 231/var(--tw-text-opacity))}.opacity-70{opacity:.7}.mix-blend-darken{mix-blend-mode:darken}.transition{transition-duration:.15s;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,-webkit-backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter,-webkit-backdrop-filter;transition-timing-function:cubic-bezier(.4,0,.2,1)}.duration-300{transition-duration:.3s}.hover\:cursor-pointer:hover{cursor:pointer}.hover\:bg-blue-400:hover{--tw-bg-opacity:1;background-color:rgb(76 159 253/var(--tw-bg-opacity))}.hover\:text-darkBlue-200:hover{--tw-text-opacity:1;color:rgb(97 65 137/var(--tw-text-opacity))}.hover\:text-darkBlue-500\/80:hover{color:#190933cc}.hover\:underline:hover{text-decoration-line:underline}@media (min-width:768px){.md\:w-8\/12{width:66.666667%}.md\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.md\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.md\:text-4xl{font-size:2.25rem;line-height:2.5rem}}@media (min-width:1024px){.lg\:w-6\/12{width:50%}}
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/ASSETS/CONFIG/MANIFEST.JS CODE IS BELOW
+//= link_tree ../images
+//= link_directory ../stylesheets .css
+//= link_tree ../../javascript .js
+//= link_tree ../../../vendor/javascript .js
+//= link_tree ../builds
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/ASSETS/IMAGES/.KEEP CODE IS BELOW
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/ASSETS/STYLESHEETS/APPLICATION.CSS CODE IS BELOW
+/*
+ * This is a manifest file that'll be compiled into application.css, which will include all the files
+ * listed below.
+ *
+ * Any CSS (and SCSS, if configured) file within this directory, lib/assets/stylesheets, or any plugin's
+ * vendor/assets/stylesheets directory can be referenced here using a relative path.
+ *
+ * You're free to add application-wide styles to this file and they'll appear at the bottom of the
+ * compiled file so the styles you add here take precedence over styles defined in any other CSS
+ * files in this directory. Styles in this file should be added after the last require_* statement.
+ * It is generally better to create a new file per style scope.
+ *
+ *= require_tree .
+ *= require_self
+ */
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/ASSETS/STYLESHEETS/APPLICATION.TAILWIND.CSS CODE IS BELOW
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-body-font;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-header-font;
+  }
+}
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CHANNELS/APPLICATION_CABLE/CHANNEL.RB CODE IS BELOW
+module ApplicationCable
+  class Channel < ActionCable::Channel::Base
+  end
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CHANNELS/APPLICATION_CABLE/CONNECTION.RB CODE IS BELOW
+module ApplicationCable
+  class Connection < ActionCable::Connection::Base
+  end
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/ABOUT_CONTROLLER.RB CODE IS BELOW
+class AboutController < ApplicationController
+  def index
+  end
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/APPLICATION_CONTROLLER.RB CODE IS BELOW
+class ApplicationController < ActionController::Base
+  helper_method :current_user, :logged_in?
+
+  private
+
+  def current_user
+    @current_user ||= User.find_by(id: session[:user_id]) if session[:user_id]
+  end
+
+  def logged_in?
+    !!current_user
+  end
+
+  def require_login
+    unless logged_in?
+      flash[:alert] = "You must be logged in to access this page"
+      redirect_to login_path
+    end
+  end
+end
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/AUTH_CONTROLLER.RB CODE IS BELOW
+class AuthController < ApplicationController
+  def login
+  end
+
+  def register
+  end
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/CONCERNS/.KEEP CODE IS BELOW
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/HOME_CONTROLLER.RB CODE IS BELOW
+class HomeController < ApplicationController
+  def index
+  end
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/INBOX_CONTROLLER.RB CODE IS BELOW
+class InboxController < ApplicationController
+  before_action :require_login
+
+  def index
+    @senders = current_user.incoming_emails.group_by(&:sender).transform_values do |emails|
+      {
+        name: emails.first.sender_name,
+        unread_count: emails.count { |e| !e.read },
+        emails: emails.sort_by(&:created_at).reverse.take(5)
+      }
+    end
+    
+    @selected_email = params[:email_id] ? current_user.incoming_emails.find(params[:email_id]) : @senders.values.first&.dig(:emails, 0)
+  end
+
+  def show
+    @email = current_user.incoming_emails.find(params[:id])
+    @email.update(read: true)
+    
+    render json: { body: @email.body, subject: @email.subject }
+  end
+
+  def require_login
+    unless current_user
+      redirect_to login_path, alert: "You must be logged in to access this page"
+    end
+  end
+end
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/INCOMING_EMAILS_CONTROLLER.RB CODE IS BELOW
+class IncomingEmailsController < ApplicationController
+  def show
+    @email = current_user.incoming_emails.find(params[:id])
+  end
+end
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/PRICING_CONTROLLER.RB CODE IS BELOW
+class PricingController < ApplicationController
+  def index
+  end
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/SESSIONS_CONTROLLER.RB CODE IS BELOW
+class SessionsController < ApplicationController
+  def new
+  end
+
+  def create
+    user = User.find_by(username: params[:username])
+    if user && user.authenticate(params[:password])
+      session[:user_id] = user.id
+      redirect_to inbox_path, notice: 'Logged in successfully!'
+    else
+      flash.now[:alert] = 'Invalid username or password'
+      render :new
+    end
+  end
+
+  def destroy
+    session[:user_id] = nil
+    redirect_to root_path, notice: 'Logged out successfully!'
+  end
+end
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/CONTROLLERS/USERS_CONTROLLER.RB CODE IS BELOW
+class UsersController < ApplicationController
+  def new
+    @user = User.new
+  end
+
+  def create
+    @user = User.new(user_params)
+    if @user.save
+      session[:user_id] = @user.id
+      redirect_to inbox_path, notice: 'Account created successfully! Welcome to your inbox.'
+    else
+      render :new
+    end
+  end
+
+  private
+
+  def user_params
+    params.require(:user).permit(:username, :password, :password_confirmation)
+  end
+end
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/HELPERS/ABOUT_HELPER.RB CODE IS BELOW
+module AboutHelper
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/HELPERS/APPLICATION_HELPER.RB CODE IS BELOW
+module ApplicationHelper
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/HELPERS/AUTH_HELPER.RB CODE IS BELOW
+module AuthHelper
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/HELPERS/HOME_HELPER.RB CODE IS BELOW
+module HomeHelper
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/HELPERS/INBOX_HELPER.RB CODE IS BELOW
+module InboxHelper
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/HELPERS/INCOMING_EMAILS_HELPER.RB CODE IS BELOW
+module IncomingEmailsHelper
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/HELPERS/PRICING_HELPER.RB CODE IS BELOW
+module PricingHelper
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/HELPERS/SESSIONS_HELPER.RB CODE IS BELOW
+module SessionsHelper
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/HELPERS/USERS_HELPER.RB CODE IS BELOW
+module UsersHelper
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/JAVASCRIPT/APPLICATION.JS CODE IS BELOW
+// Configure your import map in config/importmap.rb. Read more: https://github.com/rails/importmap-rails
+import "@hotwired/turbo-rails"
+import "controllers"
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/JAVASCRIPT/CONTROLLERS/APPLICATION.JS CODE IS BELOW
+import { Application } from "@hotwired/stimulus"
+
+const application = Application.start()
+
+// Configure Stimulus development experience
+application.debug = false
+window.Stimulus   = application
+
+export { application }
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/JAVASCRIPT/CONTROLLERS/EMAIL_CONTROLLER.JS CODE IS BELOW
+import { Controller } from "@hotwired/stimulus";
+
+export default class extends Controller {
+  static targets = ["subject", "body", "list"];
+
+  connect() {
+    if (this.hasSubjectTarget && this.hasBodyTarget) {
+      this.loadEmail(this.subjectTarget.dataset.emailId);
+    }
+  }
+
+  select(event) {
+    event.preventDefault();
+    const emailId = event.currentTarget.dataset.emailId;
+    this.loadEmail(emailId);
+  }
+
+  loadEmail(emailId) {
+    fetch(`/inbox/${emailId}`, {
+      headers: {
+        Accept: "application/json",
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        this.subjectTarget.textContent = data.subject;
+        this.bodyTarget.innerHTML = this.simpleFormat(data.body);
+
+        // Update the bold status of the list items
+        this.listTargets.forEach((item) => {
+          if (item.dataset.emailId === emailId) {
+            item.classList.remove("font-bold");
+          }
+        });
+      });
+  }
+
+  simpleFormat(text) {
+    if (!text) return "";
+    let formatted = text.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>");
+    return `<p>${formatted}</p>`;
+  }
+}
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/JAVASCRIPT/CONTROLLERS/HELLO_CONTROLLER.JS CODE IS BELOW
+import { Controller } from "@hotwired/stimulus"
+
+export default class extends Controller {
+  connect() {
+    this.element.textContent = "Hello World!"
+  }
+}
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/JAVASCRIPT/CONTROLLERS/INDEX.JS CODE IS BELOW
+// Import and register all your controllers from the importmap under controllers/*
+
+import { application } from "controllers/application"
+
+// Eager load all controllers defined in the import map under controllers/**/*_controller
+import { eagerLoadControllersFrom } from "@hotwired/stimulus-loading"
+eagerLoadControllersFrom("controllers", application)
+
+// Lazy load controllers as they appear in the DOM (remember not to preload controllers in import map!)
+// import { lazyLoadControllersFrom } from "@hotwired/stimulus-loading"
+// lazyLoadControllersFrom("controllers", application)
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/JOBS/APPLICATION_JOB.RB CODE IS BELOW
+class ApplicationJob < ActiveJob::Base
+  # Automatically retry jobs that encountered a deadlock
+  # retry_on ActiveRecord::Deadlocked
+
+  # Most jobs are safe to ignore if the underlying records are no longer available
+  # discard_on ActiveJob::DeserializationError
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/MAILBOXES/APPLICATION_MAILBOX.RB CODE IS BELOW
+class ApplicationMailbox < ActionMailbox::Base
+  # routing /something/i => :somewhere
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/MAILBOXES/INBOX_MAILBOX.RB CODE IS BELOW
+class InboxMailbox < ApplicationMailbox
+  def process
+    user = User.find_by(email: mail.to.first)
+    
+    if user
+      user.incoming_emails.create!(
+        subject: mail.subject,
+        body: mail.body.to_s,
+        sender: mail.from.first,
+        received_at: Time.now
+      )
+      Rails.logger.info "Email processed for user: #{user.email}"
+    else
+      Rails.logger.warn "Received email for non-existent user: #{mail.to.first}"
+    end
+  end
+end
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/MAILERS/APPLICATION_MAILER.RB CODE IS BELOW
+class ApplicationMailer < ActionMailer::Base
+  default from: "from@example.com"
+  layout "mailer"
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/MODELS/APPLICATION_RECORD.RB CODE IS BELOW
+class ApplicationRecord < ActiveRecord::Base
+  primary_abstract_class
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/MODELS/CONCERNS/.KEEP CODE IS BELOW
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/MODELS/INCOMING_EMAIL.RB CODE IS BELOW
+class IncomingEmail < ApplicationRecord
+  belongs_to :user
+
+  attribute :read, :boolean, default: false
+  
+  def sender_name
+    sender.split('@').first.titleize
+  end
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/MODELS/USER.RB CODE IS BELOW
+class User < ApplicationRecord
+    has_secure_password
+    validates :username, presence: true, uniqueness: true, format: { with: /\A[a-zA-Z0-9_]+\z/, message: "only allows letters, numbers, and underscores" }
+    validates :password, presence: true, length: { minimum: 6 }
+    has_many :incoming_emails
+
+    def email
+      "#{username}@bazap.news"
+    end
+
+    def receive_email(subject, sender, body)
+        incoming_emails.create(subject: subject, sender: sender, body: body)
+      end
+  end
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/ABOUT/INDEX.HTML.ERB CODE IS BELOW
+<div>
+  <h1 class="font-bold text-4xl">About#index</h1>
+  <p>Find me in app/views/about/index.html.erb</p>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/AUTH/LOGIN.HTML.ERB CODE IS BELOW
+<div>
+  <h1 class="font-bold text-4xl">Auth#login</h1>
+  <p>Find me in app/views/auth/login.html.erb</p>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/AUTH/REGISTER.HTML.ERB CODE IS BELOW
+<div>
+  <h1 class="font-bold text-4xl">Auth#register</h1>
+  <p>Find me in app/views/auth/register.html.erb</p>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/HOME/INDEX.HTML.ERB CODE IS BELOW
+<%= render partial: "shared/nav_front" %>
+<div class="container mx-auto ">
+  <h1 class="">
+    <%= render partial: "shared/graphics/logo",  locals: {classes: "fill-darkBlue-500"} %>
+  </h1>
+  <h2 class="text-2xl md:text-4xl text-center bg-darkBlue-600 font-light italic p-4 border-b border-darkBlue-500 mb-16">"The newsletter experience for the modern times"</h2>
+  
+  <div class="grid grid-cols-1 md:grid-cols-2 mb-16 items-center">
+    <div>
+      <h3 class="text-3xl font-header-font mb-4 text-darkBlue-500">One email to manage all your subscriptions, beautifully rendered and easily readable.</h3>
+      <p class="mb-4 text-darkBlue-500 leading-relaxed">Imagine a world where your inbox is no longer cluttered with unreadable newsletters. With Bazap, that world is a reality. We take your subscribed newsletters and transform them into beautifully formatted articles, all accessible from a single, easy-to-manage email address. No more juggling multiple inboxes or complex forwarding rules—just a seamless reading experience designed for your comfort and convenience.</p>
+    </div>
+    
+    <div class="bg-darkBlue-500 text-white-500 p-6 rounded-xl">
+      <h3 class="mb-4 text-center text-3xl italic p-4 text-blue-500">Get your free bazap.news email</h3>
+      <%= form_with(model: User.new, url: users_path, local: true) do |f| %>
+        <div class="flex mb-4 rounded ">
+          <%= f.text_field :username, placeholder: "Your username", class: "flex-1 p-2 text-darkBlue-500 rounded-l bg-cream-500 p-4" %>
+          <span class="inline-flex items-center px-8 bg-cream-500/20 text-cream-500 text-md rounded-r">
+            @bazap.news
+          </span>
+        </div>
+        <%= f.password_field :password, placeholder: "Password", class: "w-full p-2 mb-4 text-darkBlue-500 rounded bg-cream-500 p-4" %>
+        <%= f.password_field :password_confirmation, placeholder: "Confirm password", class: "w-full p-2 mb-4 text-darkBlue-500 rounded bg-cream-500 p-4" %>
+        <%= f.submit "Sign up", class: "w-full bg-blue-500 text-white-500 px-4 py-4 rounded hover:bg-blue-400 transition duration-300 hover:cursor-pointer" %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-red-500 rounded-lg text-white-500 overflow-hidden flex flex-col items-stretch">
+      <div class="p-8 relative grow">
+        <div class="bg-cream-500 rounded-full text-darkBlue-500 inline-block px-3 py-1 w-8 h-8 text-center mb-2">
+          <p class="text-md font-medium">1</p>
+        </div>
+        <h3 class="text-5xl font-header-font mt-4 mb-4 italic text-darkBlue-500">Secure your free bazap.news email</h3>
+      </div>
+      <%= image_tag "landing_illu 1.webp", class: "object-fit mix-blend-darken opacity-70" %>
+    </div>
+    <div class="bg-green-500 rounded-lg text-white-500 overflow-hidden flex flex-col items-stretch">
+      <div class="p-8 relative grow">
+        <div class="bg-cream-500 rounded-full text-darkBlue-500 inline-block px-3 py-1 w-8 h-8 text-center mb-2">
+          <p class="text-md font-medium">2</p>
+        </div>
+        <h3 class="text-5xl font-header-font mt-4 mb-4 italic text-darkBlue-500">Use it to subscribe to any newsletter</h3>
+      </div>
+      <%= image_tag "landing_illu 2.webp", class: "object-fit mix-blend-darken opacity-70" %>
+    </div>
+    <div class="bg-blue-500 rounded-lg text-white-500 overflow-hidden flex flex-col items-stretch">
+      <div class="p-8 relative grow">
+        <div class="bg-cream-500 rounded-full text-darkBlue-500 inline-block px-3 py-1 w-8 h-8 text-center mb-2">
+          <p class="text-md font-medium">3</p>
+        </div>
+        <h3 class="text-5xl font-header-font mt-4 mb-4 italic text-darkBlue-500">Enjoy the best reading experience</h3>
+      </div>
+      <%= image_tag "landing_illu 3.webp", class: "object-fit mix-blend-darken opacity-70" %>
+    </div>
+  </div>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/INBOX/_EMAIL_CONTENT.HTML.ERB CODE IS BELOW
+<h2 id="email-subject" class="text-2xl font-semibold mb-4"><%= email.subject %></h2>
+<div id="email-body" class="prose max-w-none">
+  <%= simple_format(email.body) %>
+</div>
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/INBOX/INDEX.HTML.ERB CODE IS BELOW
+<div class="flex h-screen overflow-hidden relative" data-controller="email">
+  <!-- Sidebar -->
+  <div class="flex-grow-0">
+    <div class="p-4">
+      <h2 class="text-2xl font-semibold mb-4">Inbox</h2>
+      <% if @senders.present? %>
+        <ul>
+          <% @senders.each do |sender, data| %>
+            <li class="mb-4">
+              <h3 class="font-medium">
+                <%= data[:name] %> 
+                <% if data[:unread_count] > 0 %>
+                  <span class="text-sm text-gray-500">(<%= data[:unread_count] %> unread)</span>
+                <% end %>
+              </h3>
+              <ul class="ml-4 mt-2">
+                <% data[:emails].each do |email| %>
+                  <li class="text-sm py-1">
+                    <%= link_to email.subject, incoming_email_path(email), class: "hover:underline #{'font-bold' unless email.read}", data: { action: "click->email#select", email_id: email.id } %>
+                  </li>
+                <% end %>
+              </ul>
+            </li>
+          <% end %>
+        </ul>
+      <% else %>
+        <p>Your inbox is empty.</p>
+      <% end %>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="ml-64 flex-1 overflow-y-auto">
+    <div class="bg-white p-8 min-h-screen max-w-4xl mx-auto">
+      <h2 data-email-target="subject" class="text-2xl font-semibold mb-4" data-email-id="<%= @selected_email&.id %>">
+        <%= @selected_email&.subject || "No email selected" %>
+      </h2>
+      <div data-email-target="body" class="prose max-w-none">
+        <%= simple_format(@selected_email&.body) %>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/INCOMING_EMAILS/SHOW.HTML.ERB CODE IS BELOW
+<div>
+  <h1 class="font-bold text-4xl">IncomingEmails#show</h1>
+  <p>Find me in app/views/incoming_emails/show.html.erb</p>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/LAYOUTS/APPLICATION.HTML.ERB CODE IS BELOW
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Bazap.news</title>
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= stylesheet_link_tag "tailwind", "inter-font", "data-turbo-track": "reload" %>
+    <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-cream-500 p-4">
+    <main class="container mx-auto">
+      <%= yield %>
+    </main>
+  </body>
+</html>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/LAYOUTS/MAILER.HTML.ERB CODE IS BELOW
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <style>
+      /* Email styles need to be inline */
+    </style>
+  </head>
+
+  <body>
+    <%= yield %>
+  </body>
+</html>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/LAYOUTS/MAILER.TEXT.ERB CODE IS BELOW
+<%= yield %>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/PRICING/INDEX.HTML.ERB CODE IS BELOW
+<div>
+  <h1 class="font-bold text-4xl">Pricing#index</h1>
+  <p>Find me in app/views/pricing/index.html.erb</p>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/SESSIONS/CREATE.HTML.ERB CODE IS BELOW
+<div>
+  <h1 class="font-bold text-4xl">Sessions#create</h1>
+  <p>Find me in app/views/sessions/create.html.erb</p>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/SESSIONS/DESTROY.HTML.ERB CODE IS BELOW
+<div>
+  <h1 class="font-bold text-4xl">Sessions#destroy</h1>
+  <p>Find me in app/views/sessions/destroy.html.erb</p>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/SESSIONS/NEW.HTML.ERB CODE IS BELOW
+<div class="p-4 md:w-8/12 lg:w-6/12 mx-auto">
+  <%= link_to '< Back to homepage', root_path, class: 'hover:text-darkBlue-200' %>
+</div>
+
+<div class="bg-darkBlue-500 text-white-500 p-6 rounded-xl md:w-8/12 lg:w-6/12 mx-auto">
+  <div class="pb-8 mb-8 border-b border-cream-500/20">
+    <%= render partial: "shared/graphics/logo",  locals: {classes: "fill-cream-500"} %>
+  </div>
+  <h1 class="mb-4 text-center text-3xl italic p-4 text-blue-500">Login to your bazap account</h1>
+  <%= form_with(url: login_path, local: true, class: "space-y-4") do |f| %>
+    <div class="flex mb-4 rounded ">
+      <%= f.text_field :username, placeholder: "Your username", class: "flex-1 p-2 text-darkBlue-500 rounded-l bg-cream-500 p-4" %>
+      <span class="inline-flex items-center px-8 bg-cream-500/20 text-cream-500 text-md rounded-r">
+        @bazap.news
+      </span>
+    </div>
+    <%= f.password_field :password, placeholder: "Password", class: "w-full p-2 mb-4 text-darkBlue-500 rounded bg-cream-500 p-4" %>
+    <%= f.submit "Login", class: "w-full bg-blue-500 text-white-500 px-4 py-4 rounded hover:bg-blue-400 transition duration-300 hover:cursor-pointer" %>
+  <% end %>
+  
+</div>
+
+<div class="p-4 md:w-8/12 lg:w-6/12 mx-auto">
+  <div class="flex items-center gap-2"> 
+    <p class="font-header-font text-2xl font-light italic">Allready have an account ?</p>
+    <%= link_to 'REGISTER', signup_path, class: 'hover:text-darkBlue-500/80 py-2 px-4 border border-darkBlue-500 rounded-lg' %>
+  </div>
+</div>
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/SHARED/_NAV_FRONT.HTML.ERB CODE IS BELOW
+<nav class="text-darkBlue-500 py-4">
+    <div class="container mx-auto flex justify-start items-center space-x-6 font-semibold gap-8">
+      <%= link_to 'HOME', root_path, class: 'hover:text-darkBlue-200' %>
+      <%= link_to 'ABOUT', '#', class: 'hover:text-darkBlue-200' %>
+      <%= link_to 'PRICING', '#', class: 'hover:text-darkBlue-200' %>
+      <% if logged_in? %>
+        <%= link_to 'INBOX', inbox_path, class: 'hover:text-darkBlue-200' %>
+        <%= button_to 'LOGOUT', logout_path, method: :delete, class: 'hover:text-darkBlue-200' %>
+      <% else %>
+        <%= link_to 'LOGIN', login_path, class: 'hover:text-darkBlue-200' %>
+        <%= link_to 'REGISTER', signup_path, class: 'hover:text-darkBlue-200' %>
+      <% end %>
+    </div>
+  </nav>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/SHARED/GRAPHICS/_LOGO.HTML.ERB CODE IS BELOW
+<svg viewBox="0 0 1384 249" xmlns="http://www.w3.org/2000/svg" class="<%= classes %>">
+    <g>
+        <path d="M176.515 249H0V190.75H27.9673V58.2502H0V0H169.791C221.14 0 246.051 12.2714 256.902 31.8434C261.64 41.1634 263.626 52.0368 263.626 64.1528C263.626 74.4049 261.334 84.0356 256.902 91.9576C249.872 104.695 236.576 114.326 217.014 119.452V120.85C240.702 125.665 257.208 135.296 265.613 150.363C270.351 158.596 272.643 168.537 272.643 180.187C272.643 193.546 270.198 206.594 262.862 217.623C250.789 236.107 225.42 249.155 176.515 249.155V249ZM168.415 81.5502C168.415 65.0848 160.927 58.2502 141.365 58.2502H122.414V105.161H141.365C160.927 105.161 168.415 98.0156 168.415 81.5502ZM171.777 164.964C171.777 147.101 165.664 138.868 143.046 138.868H122.414V190.595H143.046C165.664 190.595 171.777 182.672 171.777 164.809V164.964Z"/>
+        <path d="M433.264 163.256H377.635L368.466 190.75H401.476V249H279.368V190.75H302.292L374.273 0H471.777L542.994 190.75H570.961V249H410.34V190.75H441.67L433.264 163.256ZM421.191 124.578L406.978 78.9095H405.603L390.473 124.578H421.191Z"/>
+        <path d="M692.153 58.2502H652.418V95.2196H584.257V0H808.301V46.6001L695.974 190.594H746.865V140.111H815.026V248.845H578.755V205.662L692.153 58.2502Z"/>
+        <path d="M976.716 163.256H921.087L911.918 190.75H944.928V249H822.82V190.75H845.744L917.572 0H1015.08L1086.29 190.75H1114.26V249H953.64V190.75H984.969L976.564 163.256H976.716ZM964.49 124.578L950.277 78.9095H948.902L933.772 124.578H964.49Z"/>
+        <path d="M1384 76.1135C1384 89.4722 1382.32 101.433 1377.89 112.151C1367.49 137.936 1341.82 153.936 1290.16 153.936H1244.62V190.594H1274.27V248.845H1122.05V190.594H1150.02V58.2502H1122.05V0H1290.16C1339.37 0 1365.05 15.0674 1376.51 38.8334C1381.86 49.8621 1384 62.4442 1384 76.2689V76.1135ZM1288.79 81.2395C1288.79 65.3955 1282.68 58.2502 1263.11 58.2502H1244.62V105.161H1263.11C1282.68 105.161 1288.79 96.6176 1288.79 81.0842V81.2395Z"/>
+    </g>
+</svg>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/USERS/CREATE.HTML.ERB CODE IS BELOW
+<div>
+  <h1 class="font-bold text-4xl">Users#create</h1>
+  <p>Find me in app/views/users/create.html.erb</p>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/APP/VIEWS/USERS/NEW.HTML.ERB CODE IS BELOW
+<% if @user.errors.any? %>
+  <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+    <strong class="font-bold">Error:</strong>
+    <ul>
+    <% @user.errors.full_messages.each do |message| %>
+      <li><%= message %></li>
+    <% end %>
+    </ul>
+  </div>
+<% end %>
+
+<div class="p-4 md:w-8/12 lg:w-6/12 mx-auto">
+  <%= link_to '< Back to homepage', root_path, class: 'hover:text-darkBlue-200' %>
+</div>
+<div class="bg-darkBlue-500 text-white-500 p-6 rounded-xl md:w-8/12 lg:w-6/12 mx-auto">
+  <div class="pb-8 mb-8 border-b border-cream-500/20">
+    <%= render partial: "shared/graphics/logo",  locals: {classes: "fill-cream-500"} %>
+  </div>
+  <h1 class="mb-4 text-center text-3xl italic p-4 text-blue-500">Get your free bazap.news email today !</h1>
+  <%= form_with(model: User.new, url: users_path, local: true) do |f| %>
+    <div class="flex mb-4 rounded ">
+      <%= f.text_field :username, placeholder: "Your username", class: "flex-1 p-2 text-darkBlue-500 rounded-l bg-cream-500 p-4" %>
+      <span class="inline-flex items-center px-8 bg-cream-500/20 text-cream-500 text-md rounded-r">
+        @bazap.news
+      </span>
+    </div>
+    <%= f.password_field :password, placeholder: "Password", class: "w-full p-2 mb-4 text-darkBlue-500 rounded bg-cream-500 p-4" %>
+    <%= f.password_field :password_confirmation, placeholder: "Confirm password", class: "w-full p-2 mb-4 text-darkBlue-500 rounded bg-cream-500 p-4" %>
+    <%= f.submit "Sign up", class: "w-full bg-blue-500 text-white-500 px-4 py-4 rounded hover:bg-blue-400 transition duration-300 hover:cursor-pointer" %>
+  <% end %>
+  
+</div>
+
+<div class="p-4 md:w-8/12 lg:w-6/12 mx-auto">
+  <div class="flex items-center gap-2"> 
+    <p class="font-header-font text-2xl font-light italic">Allready have an account ?</p>
+    <%= link_to 'LOGIN', login_path, class: 'hover:text-darkBlue-500/80 py-2 px-4 border border-darkBlue-500 rounded-lg' %>
+  </div>
+</div>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/APPLICATION.RB CODE IS BELOW
+require_relative "boot"
+
+require "rails/all"
+require "action_mailbox/engine"
+
+# Require the gems listed in Gemfile, including any gems
+# you've limited to :test, :development, or :production.
+Bundler.require(*Rails.groups)
+
+module BazapNews
+  class Application < Rails::Application
+    # Initialize configuration defaults for originally generated Rails version.
+    config.load_defaults 7.1
+
+    # Please, add to the `ignore` list any other `lib` subdirectories that do
+    # not contain `.rb` files, or that should not be reloaded or eager loaded.
+    # Common ones are `templates`, `generators`, or `middleware`, for example.
+    config.autoload_lib(ignore: %w(assets tasks))
+
+    # Configuration for the application, engines, and railties goes here.
+    #
+    # These settings can be overridden in specific environments using the files
+    # in config/environments, which are processed later.
+    #
+    # config.time_zone = "Central Time (US & Canada)"
+    # config.eager_load_paths << Rails.root.join("extras")
+    config.action_mailbox.ingress = :smtp
+    config.to_prepare do
+      ActionMailbox::Base.router = ->(_inbound_email) { InboxMailbox.new }
+    end
+  end
+end
+
+
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/BOOT.RB CODE IS BELOW
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../Gemfile", __dir__)
+
+require "bundler/setup" # Set up gems listed in the Gemfile.
+require "bootsnap/setup" # Speed up boot time by caching expensive operations.
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/CABLE.YML CODE IS BELOW
+development:
+  adapter: redis
+  url: redis://localhost:6379/1
+
+test:
+  adapter: test
+
+production:
+  adapter: redis
+  url: <%= ENV.fetch("REDIS_URL") { "redis://localhost:6379/1" } %>
+  channel_prefix: bazap_news_production
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/CREDENTIALS.YML.ENC CODE IS BELOW
+zBIbIFRfVRuqLKSZORFWbMHMkGxrjs5KMlbqpr8B5G6DulvpyCt6pCMbnWepxGk8WDYGGJMv59m4cfiVYoXWiXKmB3wm1C2PPWjuqj3WvXPAcqk4Bu9muRRWMqCQ2ymxBXspp1CCdtZai6ktIPGaafCu3h/NInktf8CS1Ts00RRkQL4CZVcVersbcdWK4Lir6V+DsJMa2Gc4678f/WJbYIFVKc902Y9u+0lrJH6p90+PXjij5PFM9f80cmWVIRZA/8P9he3QG9ZphtTWC7wz65L7G3GxPU9AxqtnwK12DGCSmYvHoC0FdtmHmTtvnJMBJF7t877pS/jv8Ik1nL31V0E1LJelNFH9sUGWQUuSnzl1JQW3nDZ0QjsPYwOpXQ0pKYQFZAkJhxsyyPDTHzs74vuLOmhJEHkL8bhfXw1LmYndea7KzG9epNnpgAcnUbfckXu/x6u9fcf0f9KnSm4JKkxvsF4m--zavEz+J3dIU9uPiG--verFA+FadWgppuk7EpIamw==
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/DATABASE.YML CODE IS BELOW
+# PostgreSQL. Versions 9.3 and up are supported.
+#
+# Install the pg driver:
+#   gem install pg
+# On macOS with Homebrew:
+#   gem install pg -- --with-pg-config=/usr/local/bin/pg_config
+# On Windows:
+#   gem install pg
+#       Choose the win32 build.
+#       Install PostgreSQL and put its /bin directory on your path.
+#
+# Configure Using Gemfile
+# gem "pg"
+#
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  # For details on connection pooling, see Rails configuration guide
+  # https://guides.rubyonrails.org/configuring.html#database-pooling
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+
+development:
+  <<: *default
+  database: bazap_news_development
+
+  # The specified database role being used to connect to PostgreSQL.
+  # To create additional roles in PostgreSQL see `$ createuser --help`.
+  # When left blank, PostgreSQL will use the default role. This is
+  # the same name as the operating system user running Rails.
+  #username: bazap_news
+
+  # The password associated with the PostgreSQL role (username).
+  #password:
+
+  # Connect on a TCP socket. Omitted by default since the client uses a
+  # domain socket that doesn't need configuration. Windows does not have
+  # domain sockets, so uncomment these lines.
+  #host: localhost
+
+  # The TCP port the server listens on. Defaults to 5432.
+  # If your server runs on a different port number, change accordingly.
+  #port: 5432
+
+  # Schema search path. The server defaults to $user,public
+  #schema_search_path: myapp,sharedapp,public
+
+  # Minimum log levels, in increasing order:
+  #   debug5, debug4, debug3, debug2, debug1,
+  #   log, notice, warning, error, fatal, and panic
+  # Defaults to warning.
+  #min_messages: notice
+
+# Warning: The database defined as "test" will be erased and
+# re-generated from your development database when you run "rake".
+# Do not set this db to the same as development or production.
+test:
+  <<: *default
+  database: bazap_news_test
+
+# As with config/credentials.yml, you never want to store sensitive information,
+# like your database password, in your source code. If your source code is
+# ever seen by anyone, they now have access to your database.
+#
+# Instead, provide the password or a full connection URL as an environment
+# variable when you boot the app. For example:
+#
+#   DATABASE_URL="postgres://myuser:mypass@localhost/somedatabase"
+#
+# If the connection URL is provided in the special DATABASE_URL environment
+# variable, Rails will automatically merge its configuration values on top of
+# the values provided in this file. Alternatively, you can specify a connection
+# URL environment variable explicitly:
+#
+#   production:
+#     url: <%= ENV["MY_APP_DATABASE_URL"] %>
+#
+# Read https://guides.rubyonrails.org/configuring.html#configuring-a-database
+# for a full overview on how database connection configuration can be specified.
+#
+production:
+  <<: *default
+  database: bazap_news_production
+  username: bazap_news
+  password: <%= ENV["BAZAP_NEWS_DATABASE_PASSWORD"] %>
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/ENVIRONMENT.RB CODE IS BELOW
+# Load the Rails application.
+require_relative "application"
+
+# Initialize the Rails application.
+Rails.application.initialize!
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/ENVIRONMENTS/DEVELOPMENT.RB CODE IS BELOW
+require "active_support/core_ext/integer/time"
+
+Rails.application.configure do
+  # Settings specified here will take precedence over those in config/application.rb.
+
+  # In the development environment your application's code is reloaded any time
+  # it changes. This slows down response time but is perfect for development
+  # since you don't have to restart the web server when you make code changes.
+  config.enable_reloading = true
+
+  # Do not eager load code on boot.
+  config.eager_load = false
+
+  # Show full error reports.
+  config.consider_all_requests_local = true
+
+  # Enable server timing
+  config.server_timing = true
+
+  # Enable/disable caching. By default caching is disabled.
+  # Run rails dev:cache to toggle caching.
+  if Rails.root.join("tmp/caching-dev.txt").exist?
+    config.action_controller.perform_caching = true
+    config.action_controller.enable_fragment_cache_logging = true
+
+    config.cache_store = :memory_store
+    config.public_file_server.headers = {
+      "Cache-Control" => "public, max-age=#{2.days.to_i}"
+    }
+  else
+    config.action_controller.perform_caching = false
+
+    config.cache_store = :null_store
+  end
+
+  # Store uploaded files on the local file system (see config/storage.yml for options).
+  config.active_storage.service = :local
+
+  # Don't care if the mailer can't send.
+  config.action_mailer.raise_delivery_errors = false
+
+  config.action_mailer.perform_caching = false
+
+  # Print deprecation notices to the Rails logger.
+  config.active_support.deprecation = :log
+
+  # Raise exceptions for disallowed deprecations.
+  config.active_support.disallowed_deprecation = :raise
+
+  # Tell Active Support which deprecation messages to disallow.
+  config.active_support.disallowed_deprecation_warnings = []
+
+  # Raise an error on page load if there are pending migrations.
+  config.active_record.migration_error = :page_load
+
+  # Highlight code that triggered database queries in logs.
+  config.active_record.verbose_query_logs = true
+
+  # Highlight code that enqueued background job in logs.
+  config.active_job.verbose_enqueue_logs = true
+
+  # Suppress logger output for asset requests.
+  config.assets.quiet = true
+
+  # Raises error for missing translations.
+  # config.i18n.raise_on_missing_translations = true
+
+  # Annotate rendered view with file names.
+  # config.action_view.annotate_rendered_view_with_filenames = true
+
+  # Uncomment if you wish to allow Action Cable access from any origin.
+  # config.action_cable.disable_request_forgery_protection = true
+
+  # Raise error when a before_action's only/except options reference missing actions
+  config.action_controller.raise_on_missing_callback_actions = true
+
+  config.assets.debug = true
+
+  config.assets.compile = true
+
+  config.action_mailbox.ingress = :mailgun
+  
+  config.hosts << "a430-73-202-218-83.ngrok-free.app"
+  config.hosts << "a430-73-202-218-83.ngrok-free.app"
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/ENVIRONMENTS/PRODUCTION.RB CODE IS BELOW
+require "active_support/core_ext/integer/time"
+
+Rails.application.configure do
+  # Prepare the ingress controller used to receive mail
+  # config.action_mailbox.ingress = :relay
+
+  # Settings specified here will take precedence over those in config/application.rb.
+
+  # Code is not reloaded between requests.
+  config.enable_reloading = false
+
+  # Eager load code on boot. This eager loads most of Rails and
+  # your application in memory, allowing both threaded web servers
+  # and those relying on copy on write to perform better.
+  # Rake tasks automatically ignore this option for performance.
+  config.eager_load = true
+
+  # Full error reports are disabled and caching is turned on.
+  config.consider_all_requests_local = false
+  config.action_controller.perform_caching = true
+
+  # Ensures that a master key has been made available in ENV["RAILS_MASTER_KEY"], config/master.key, or an environment
+  # key such as config/credentials/production.key. This key is used to decrypt credentials (and other encrypted files).
+  # config.require_master_key = true
+
+  # Disable serving static files from `public/`, relying on NGINX/Apache to do so instead.
+  # config.public_file_server.enabled = false
+
+  # Compress CSS using a preprocessor.
+  # config.assets.css_compressor = :sass
+
+  # Do not fall back to assets pipeline if a precompiled asset is missed.
+  config.assets.compile = false
+
+  # Enable serving of images, stylesheets, and JavaScripts from an asset server.
+  # config.asset_host = "http://assets.example.com"
+
+  # Specifies the header that your server uses for sending files.
+  # config.action_dispatch.x_sendfile_header = "X-Sendfile" # for Apache
+  # config.action_dispatch.x_sendfile_header = "X-Accel-Redirect" # for NGINX
+
+  # Store uploaded files on the local file system (see config/storage.yml for options).
+  config.active_storage.service = :local
+
+  # Mount Action Cable outside main process or domain.
+  # config.action_cable.mount_path = nil
+  # config.action_cable.url = "wss://example.com/cable"
+  # config.action_cable.allowed_request_origins = [ "http://example.com", /http:\/\/example.*/ ]
+
+  # Assume all access to the app is happening through a SSL-terminating reverse proxy.
+  # Can be used together with config.force_ssl for Strict-Transport-Security and secure cookies.
+  # config.assume_ssl = true
+
+  # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
+  config.force_ssl = true
+
+  # Log to STDOUT by default
+  config.logger = ActiveSupport::Logger.new(STDOUT)
+    .tap  { |logger| logger.formatter = ::Logger::Formatter.new }
+    .then { |logger| ActiveSupport::TaggedLogging.new(logger) }
+
+  # Prepend all log lines with the following tags.
+  config.log_tags = [ :request_id ]
+
+  # "info" includes generic and useful information about system operation, but avoids logging too much
+  # information to avoid inadvertent exposure of personally identifiable information (PII). If you
+  # want to log everything, set the level to "debug".
+  config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
+
+  # Use a different cache store in production.
+  # config.cache_store = :mem_cache_store
+
+  # Use a real queuing backend for Active Job (and separate queues per environment).
+  # config.active_job.queue_adapter = :resque
+  # config.active_job.queue_name_prefix = "bazap_news_production"
+
+  config.action_mailer.perform_caching = false
+
+  # Ignore bad email addresses and do not raise email delivery errors.
+  # Set this to true and configure the email server for immediate delivery to raise delivery errors.
+  # config.action_mailer.raise_delivery_errors = false
+
+  # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
+  # the I18n.default_locale when a translation cannot be found).
+  config.i18n.fallbacks = true
+
+  # Don't log any deprecations.
+  config.active_support.report_deprecations = false
+
+  # Do not dump schema after migrations.
+  config.active_record.dump_schema_after_migration = false
+
+  # Enable DNS rebinding protection and other `Host` header attacks.
+  # config.hosts = [
+  #   "example.com",     # Allow requests from example.com
+  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
+  # ]
+  # Skip DNS rebinding protection for the default health check endpoint.
+  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/ENVIRONMENTS/TEST.RB CODE IS BELOW
+require "active_support/core_ext/integer/time"
+
+# The test environment is used exclusively to run your application's
+# test suite. You never need to work with it otherwise. Remember that
+# your test database is "scratch space" for the test suite and is wiped
+# and recreated between test runs. Don't rely on the data there!
+
+Rails.application.configure do
+  # Settings specified here will take precedence over those in config/application.rb.
+
+  # While tests run files are not watched, reloading is not necessary.
+  config.enable_reloading = false
+
+  # Eager loading loads your entire application. When running a single test locally,
+  # this is usually not necessary, and can slow down your test suite. However, it's
+  # recommended that you enable it in continuous integration systems to ensure eager
+  # loading is working properly before deploying your code.
+  config.eager_load = ENV["CI"].present?
+
+  # Configure public file server for tests with Cache-Control for performance.
+  config.public_file_server.enabled = true
+  config.public_file_server.headers = {
+    "Cache-Control" => "public, max-age=#{1.hour.to_i}"
+  }
+
+  # Show full error reports and disable caching.
+  config.consider_all_requests_local = true
+  config.action_controller.perform_caching = false
+  config.cache_store = :null_store
+
+  # Render exception templates for rescuable exceptions and raise for other exceptions.
+  config.action_dispatch.show_exceptions = :rescuable
+
+  # Disable request forgery protection in test environment.
+  config.action_controller.allow_forgery_protection = false
+
+  # Store uploaded files on the local file system in a temporary directory.
+  config.active_storage.service = :test
+
+  config.action_mailer.perform_caching = false
+
+  # Tell Action Mailer not to deliver emails to the real world.
+  # The :test delivery method accumulates sent emails in the
+  # ActionMailer::Base.deliveries array.
+  config.action_mailer.delivery_method = :test
+
+  # Print deprecation notices to the stderr.
+  config.active_support.deprecation = :stderr
+
+  # Raise exceptions for disallowed deprecations.
+  config.active_support.disallowed_deprecation = :raise
+
+  # Tell Active Support which deprecation messages to disallow.
+  config.active_support.disallowed_deprecation_warnings = []
+
+  # Raises error for missing translations.
+  # config.i18n.raise_on_missing_translations = true
+
+  # Annotate rendered view with file names.
+  # config.action_view.annotate_rendered_view_with_filenames = true
+
+  # Raise error when a before_action's only/except options reference missing actions
+  config.action_controller.raise_on_missing_callback_actions = true
+end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/IMPORTMAP.RB CODE IS BELOW
+# Pin npm packages by running ./bin/importmap
+
+pin "application"
+pin "@hotwired/turbo-rails", to: "turbo.min.js"
+pin "@hotwired/stimulus", to: "stimulus.min.js"
+pin "@hotwired/stimulus-loading", to: "stimulus-loading.js"
+pin_all_from "app/javascript/controllers", under: "controllers"
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/INITIALIZERS/ASSETS.RB CODE IS BELOW
+# Be sure to restart your server when you modify this file.
+
+# Version of your assets, change this if you want to expire all your assets.
+Rails.application.config.assets.version = "1.0"
+
+# Add additional assets to the asset load path.
+# Rails.application.config.assets.paths << Emoji.images_path
+
+# Precompile additional assets.
+# application.js, application.css, and all non-JS/CSS in the app/assets
+# folder are already added.
+# Rails.application.config.assets.precompile += %w( admin.js admin.css )
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/INITIALIZERS/CONTENT_SECURITY_POLICY.RB CODE IS BELOW
+# Be sure to restart your server when you modify this file.
+
+# Define an application-wide content security policy.
+# See the Securing Rails Applications Guide for more information:
+# https://guides.rubyonrails.org/security.html#content-security-policy-header
+
+# Rails.application.configure do
+#   config.content_security_policy do |policy|
+#     policy.default_src :self, :https
+#     policy.font_src    :self, :https, :data
+#     policy.img_src     :self, :https, :data
+#     policy.object_src  :none
+#     policy.script_src  :self, :https
+#     policy.style_src   :self, :https
+#     # Specify URI for violation reports
+#     # policy.report_uri "/csp-violation-report-endpoint"
+#   end
+#
+#   # Generate session nonces for permitted importmap, inline scripts, and inline styles.
+#   config.content_security_policy_nonce_generator = ->(request) { request.session.id.to_s }
+#   config.content_security_policy_nonce_directives = %w(script-src style-src)
+#
+#   # Report violations without enforcing the policy.
+#   # config.content_security_policy_report_only = true
+# end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/INITIALIZERS/FILTER_PARAMETER_LOGGING.RB CODE IS BELOW
+# Be sure to restart your server when you modify this file.
+
+# Configure parameters to be partially matched (e.g. passw matches password) and filtered from the log file.
+# Use this to limit dissemination of sensitive information.
+# See the ActiveSupport::ParameterFilter documentation for supported notations and behaviors.
+Rails.application.config.filter_parameters += [
+  :passw, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn
+]
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/INITIALIZERS/INFLECTIONS.RB CODE IS BELOW
+# Be sure to restart your server when you modify this file.
+
+# Add new inflection rules using the following format. Inflections
+# are locale specific, and you may define rules for as many different
+# locales as you wish. All of these examples are active by default:
+# ActiveSupport::Inflector.inflections(:en) do |inflect|
+#   inflect.plural /^(ox)$/i, "\\1en"
+#   inflect.singular /^(ox)en/i, "\\1"
+#   inflect.irregular "person", "people"
+#   inflect.uncountable %w( fish sheep )
+# end
+
+# These inflection rules are supported but not enabled by default:
+# ActiveSupport::Inflector.inflections(:en) do |inflect|
+#   inflect.acronym "RESTful"
+# end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/INITIALIZERS/PERMISSIONS_POLICY.RB CODE IS BELOW
+# Be sure to restart your server when you modify this file.
+
+# Define an application-wide HTTP permissions policy. For further
+# information see: https://developers.google.com/web/updates/2018/06/feature-policy
+
+# Rails.application.config.permissions_policy do |policy|
+#   policy.camera      :none
+#   policy.gyroscope   :none
+#   policy.microphone  :none
+#   policy.usb         :none
+#   policy.fullscreen  :self
+#   policy.payment     :self, "https://secure.example.com"
+# end
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/INITIALIZERS/RAILS_LIVE_RELOAD.RB CODE IS BELOW
+# frozen_string_literal: true
+
+RailsLiveReload.configure do |config|
+  # config.url = "/rails/live/reload"
+
+  # Default watched folders & files
+  # config.watch %r{app/views/.+\.(erb|haml|slim)$}
+  # config.watch %r{(app|vendor)/(assets|javascript)/\w+/(.+\.(css|js|html|png|jpg|ts|jsx)).*}, reload: :always
+
+  # More examples:
+  # config.watch %r{app/helpers/.+\.rb}, reload: :always
+  # config.watch %r{config/locales/.+\.yml}, reload: :always
+
+  # config.enabled = Rails.env.development?
+end if defined?(RailsLiveReload)
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/LOCALES/EN.YML CODE IS BELOW
+# Files in the config/locales directory are used for internationalization and
+# are automatically loaded by Rails. If you want to use locales other than
+# English, add the necessary files in this directory.
+#
+# To use the locales, use `I18n.t`:
+#
+#     I18n.t "hello"
+#
+# In views, this is aliased to just `t`:
+#
+#     <%= t("hello") %>
+#
+# To use a different locale, set it with `I18n.locale`:
+#
+#     I18n.locale = :es
+#
+# This would use the information in config/locales/es.yml.
+#
+# To learn more about the API, please read the Rails Internationalization guide
+# at https://guides.rubyonrails.org/i18n.html.
+#
+# Be aware that YAML interprets the following case-insensitive strings as
+# booleans: `true`, `false`, `on`, `off`, `yes`, `no`. Therefore, these strings
+# must be quoted to be interpreted as strings. For example:
+#
+#     en:
+#       "yes": yup
+#       enabled: "ON"
+
+en:
+  hello: "Hello world"
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/MASTER.KEY CODE IS BELOW
+3d1fdb9bdb48e1f56893b3e1e4486153
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/PUMA.RB CODE IS BELOW
+# This configuration file will be evaluated by Puma. The top-level methods that
+# are invoked here are part of Puma's configuration DSL. For more information
+# about methods provided by the DSL, see https://puma.io/puma/Puma/DSL.html.
+
+# Puma can serve each request in a thread from an internal thread pool.
+# The `threads` method setting takes two numbers: a minimum and maximum.
+# Any libraries that use thread pools should be configured to match
+# the maximum value specified for Puma. Default is set to 5 threads for minimum
+# and maximum; this matches the default thread size of Active Record.
+max_threads_count = ENV.fetch("RAILS_MAX_THREADS") { 5 }
+min_threads_count = ENV.fetch("RAILS_MIN_THREADS") { max_threads_count }
+threads min_threads_count, max_threads_count
+
+# Specifies that the worker count should equal the number of processors in production.
+if ENV["RAILS_ENV"] == "production"
+  require "concurrent-ruby"
+  worker_count = Integer(ENV.fetch("WEB_CONCURRENCY") { Concurrent.physical_processor_count })
+  workers worker_count if worker_count > 1
+end
+
+# Specifies the `worker_timeout` threshold that Puma will use to wait before
+# terminating a worker in development environments.
+worker_timeout 3600 if ENV.fetch("RAILS_ENV", "development") == "development"
+
+# Specifies the `port` that Puma will listen on to receive requests; default is 3000.
+port ENV.fetch("PORT") { 3000 }
+
+# Specifies the `environment` that Puma will run in.
+environment ENV.fetch("RAILS_ENV") { "development" }
+
+# Specifies the `pidfile` that Puma will use.
+pidfile ENV.fetch("PIDFILE") { "tmp/pids/server.pid" }
+
+# Allow puma to be restarted by `bin/rails restart` command.
+plugin :tmp_restart
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/ROUTES.RB CODE IS BELOW
+Rails.application.routes.draw do
+  get 'incoming_emails/show'
+  root 'home#index'
+  get 'signup', to: 'users#new'
+  post 'users', to: 'users#create'
+  get 'login', to: 'sessions#new'
+  post 'login', to: 'sessions#create'
+  delete 'logout', to: 'sessions#destroy'
+  resources :incoming_emails, only: [:show]
+  get 'inbox', to: 'inbox#index'
+  get 'inbox/:id', to: 'inbox#show', as: 'email'
+  mount ActionMailbox::Engine => "/rails/action_mailbox"
+end
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/STORAGE.YML CODE IS BELOW
+test:
+  service: Disk
+  root: <%= Rails.root.join("tmp/storage") %>
+
+local:
+  service: Disk
+  root: <%= Rails.root.join("storage") %>
+
+# Use bin/rails credentials:edit to set the AWS secrets (as aws:access_key_id|secret_access_key)
+# amazon:
+#   service: S3
+#   access_key_id: <%= Rails.application.credentials.dig(:aws, :access_key_id) %>
+#   secret_access_key: <%= Rails.application.credentials.dig(:aws, :secret_access_key) %>
+#   region: us-east-1
+#   bucket: your_own_bucket-<%= Rails.env %>
+
+# Remember not to checkin your GCS keyfile to a repository
+# google:
+#   service: GCS
+#   project: your_project
+#   credentials: <%= Rails.root.join("path/to/gcs.keyfile") %>
+#   bucket: your_own_bucket-<%= Rails.env %>
+
+# Use bin/rails credentials:edit to set the Azure Storage secret (as azure_storage:storage_access_key)
+# microsoft:
+#   service: AzureStorage
+#   storage_account_name: your_account_name
+#   storage_access_key: <%= Rails.application.credentials.dig(:azure_storage, :storage_access_key) %>
+#   container: your_container_name-<%= Rails.env %>
+
+# mirror:
+#   service: Mirror
+#   primary: local
+#   mirrors: [ amazon, google, microsoft ]
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG/TAILWIND.CONFIG.JS CODE IS BELOW
+const defaultTheme = require("tailwindcss/defaultTheme");
+
+module.exports = {
+  content: [
+    "./public/*.html",
+    "./app/helpers/**/*.rb",
+    "./app/javascript/**/*.js",
+    "./app/views/**/*.{erb,haml,html,slim}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        blue: {
+          500: "#2189fd",
+          400: "#4c9ffd",
+          300: "#76b5fd",
+          200: "#a1cbfd",
+          100: "#cce1fd",
+        },
+        darkBlue: {
+          500: "#190933",
+          400: "#311650",
+          300: "#49336c",
+          200: "#614189",
+          100: "#7a5ea6",
+        },
+        cream: {
+          500: "#ebe9c4",
+          400: "#f1eecf",
+          300: "#f6f2db",
+          200: "#faf7e6",
+          100: "#fdfbed",
+        },
+        green: {
+          500: "#39c54f",
+          400: "#60d26b",
+          300: "#87df87",
+          200: "#aeeaa3",
+          100: "#d5f5bf",
+        },
+        red: {
+          500: "#f65524",
+          400: "#f87549",
+          300: "#fa9570",
+          200: "#fcb696",
+          100: "#fed7bd",
+        },
+        white: {
+          500: "#f7f6e7",
+          400: "#f8f7ec",
+          300: "#f9f8f0",
+          200: "#faf9f4",
+          100: "#fbfaf8",
+        },
+      },
+      fontFamily: {
+        "header-font": ["Newsreader", "serif"],
+        "body-font": ["Montserrat", "sans-serif"],
+      },
+    },
+  },
+  plugins: [
+    require("@tailwindcss/forms"),
+    require("@tailwindcss/typography"),
+    require("@tailwindcss/container-queries"),
+  ],
+};
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/CONFIG.RU CODE IS BELOW
+# This file is used by Rack-based servers to start the application.
+
+require_relative "config/environment"
+
+run Rails.application
+Rails.application.load_server
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/EXPORTCODEBASE.JS CODE IS BELOW
+const fs = require("fs");
+const path = require("path");
+
+// Add folders to ignore here
+const foldersToIgnore = [
+  "vendor",
+  "bin",
+  "db",
+  "llm_text_transcripts",
+  "public",
+  "storage",
+  "log",
+  "test",
+  "tmp",
+  "app/assets",
+]; // Add specific files to ignore here
+const filesToIgnore = [".DS_Store"];
+
+// Add media file extensions to ignore here
+const mediaExtensions = [
+  // Images
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".bmp",
+  ".tiff",
+  ".webp",
+  // Audio
+  ".mp3",
+  ".wav",
+  ".ogg",
+  ".flac",
+  ".aac",
+  // Video
+  ".mp4",
+  ".avi",
+  ".mov",
+  ".wmv",
+  ".flv",
+  ".webm",
+  // Other media
+  ".pdf",
+  ".psd",
+  ".ai",
+  ".eps",
+];
+
+function isMediaFile(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return mediaExtensions.includes(ext);
+}
+
+async function collectFiles(currentDir, indent = "") {
+  const selectedFiles = [];
+  const files = await fs.promises.readdir(currentDir);
+
+  for (const file of files) {
+    const filePath = path.join(currentDir, file);
+    const stats = await fs.promises.stat(filePath);
+
+    if (stats.isDirectory()) {
+      if (!foldersToIgnore.includes(file)) {
+        console.log(`${indent}${file}/`);
+        const subFiles = await collectFiles(filePath, indent + "  ");
+        selectedFiles.push(...subFiles);
+      }
+    } else if (!isMediaFile(filePath) && !filesToIgnore.includes(file)) {
+      console.log(`${indent}${file}`);
+      selectedFiles.push(filePath);
+    }
+  }
+
+  return selectedFiles;
+}
+
+async function mergeFiles(selectedFiles, outputFilePath) {
+  let mergedContent = "";
+
+  for (const filePath of selectedFiles) {
+    const fileContent = await fs.promises.readFile(filePath, "utf-8");
+    const sectionHeader = `\n${filePath.toUpperCase()} CODE IS BELOW\n`;
+    mergedContent += sectionHeader + fileContent + "\n";
+  }
+
+  await fs.promises.writeFile(outputFilePath, mergedContent);
+}
+
+async function createOutputDirectory(outputDirPath) {
+  try {
+    await fs.promises.access(outputDirPath);
+  } catch (error) {
+    await fs.promises.mkdir(outputDirPath);
+  }
+}
+
+function getTimestampedFileName() {
+  const timestamp = new Date().toISOString().replace(/:/g, "-");
+  return `merged-repo-${timestamp}.txt`;
+}
+
+async function main() {
+  const currentDir = process.cwd();
+
+  console.log("Collecting files and folders to include in the merge:");
+  const selectedFiles = await collectFiles(currentDir);
+
+  const outputDirName = "llm_text_transcripts";
+  const outputDirPath = path.join(currentDir, outputDirName);
+  await createOutputDirectory(outputDirPath);
+
+  const outputFileName = getTimestampedFileName();
+  const outputFilePath = path.join(outputDirPath, outputFileName);
+  await mergeFiles(selectedFiles, outputFilePath);
+
+  console.log(`Merged repository saved to: ${outputFilePath}`);
+}
+
+main().catch(console.error);
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/LIB/ASSETS/.KEEP CODE IS BELOW
+
+
+/USERS/TRISTAN/CODE/BAZAP_NEWS/LIB/TASKS/.KEEP CODE IS BELOW
+

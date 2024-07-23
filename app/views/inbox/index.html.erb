@@ -1,0 +1,43 @@
+<div class="flex h-screen overflow-hidden relative" data-controller="email">
+  <!-- Sidebar -->
+  <div class="flex-grow-0">
+    <div class="p-4">
+      <h2 class="text-2xl font-semibold mb-4">Inbox</h2>
+      <% if @senders.present? %>
+        <ul>
+          <% @senders.each do |sender, data| %>
+            <li class="mb-4">
+              <h3 class="font-medium">
+                <%= data[:name] %> 
+                <% if data[:unread_count] > 0 %>
+                  <span class="text-sm text-gray-500">(<%= data[:unread_count] %> unread)</span>
+                <% end %>
+              </h3>
+              <ul class="ml-4 mt-2">
+                <% data[:emails].each do |email| %>
+                  <li class="text-sm py-1">
+                    <%= link_to email.subject, incoming_email_path(email), class: "hover:underline #{'font-bold' unless email.read}", data: { action: "click->email#select", email_id: email.id } %>
+                  </li>
+                <% end %>
+              </ul>
+            </li>
+          <% end %>
+        </ul>
+      <% else %>
+        <p>Your inbox is empty.</p>
+      <% end %>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="ml-64 flex-1 overflow-y-auto">
+    <div class="bg-white p-8 min-h-screen max-w-4xl mx-auto">
+      <h2 data-email-target="subject" class="text-2xl font-semibold mb-4" data-email-id="<%= @selected_email&.id %>">
+        <%= @selected_email&.subject || "No email selected" %>
+      </h2>
+      <div data-email-target="body" class="prose max-w-none">
+        <%= simple_format(@selected_email&.body) %>
+      </div>
+    </div>
+  </div>
+</div>
